@@ -1,0 +1,247 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id              String    @id @default(uuid())
+  email           String    @unique
+  name            String
+  role            String    // Student, Faculty, Administrator, Facility_Manager
+  ssoProvider     String    @map("sso_provider") // oidc, local
+  ssoId           String?   @unique @map("sso_id")
+  passwordHash    String?   @map("password_hash") // Only for local auth
+  lastLogin       DateTime? @map("last_login")
+  preferences     String?   // JSON String: Notification settings, timezone, etc.
+  version         Int       @default(1) // Optimistic locking
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  
+  bookings        Booking[]
+  waitlistEntries WaitlistEntry[]
+  checkouts       EquipmentCheckout[]
+  managedResources Resource[] @relation("ManagedBy")
+  auditLogs       AuditLog[]
+  notifications   Notification[]
+  
+  @@map("users")
+}
+
+model Resource {
+  id              String    @id @default(uuid())
+  name            String
+  type            String    // Classroom, Lab, Equipment, Meeting_Room, Sports_Facility
+  capacity        Int?
+  location        String
+  amenities       String?   // JSON String: Array of strings
+  bufferMinutes   Int       @default(0) @map("buffer_minutes")
+  status          String    @default("Available") // Available, Maintenance, Unavailable
+  managedBy       String?   @map("managed_by")
+  version         Int       @default(1)
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at") // Soft delete
+  
+  manager         User?     @relation("ManagedBy", fields: [managedBy], references: [id])
+  bookings        Booking[]
+  images          ResourceImage[]
+  sensors         IoTSensor[]
+  maintenance     MaintenanceSchedule[]
+  waitlistEntries WaitlistEntry[]
+  checkouts       EquipmentCheckout[]
+  
+  @@map("resources")
+  @@index([type, status])
+  @@index([deletedAt])
+}
+
+model ResourceImage {
+  id          String   @id @default(uuid())
+  resourceId  String   @map("resource_id")
+  fileUrl     String   @map("file_url")
+  fileType    String   @map("file_type") // image/png, image/jpeg, application/pdf
+  fileSizeKb  Int      @map("file_size_kb")
+  isFloorPlan Boolean  @default(false) @map("is_floor_plan")
+  uploadedAt  DateTime @default(now()) @map("uploaded_at")
+  
+  resource    Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  
+  @@map("resource_images")
+}
+
+model Booking {
+  id                  String    @id @default(uuid())
+  userId              String    @map("user_id")
+  resourceId          String    @map("resource_id")
+  startTime           DateTime  @map("start_time")
+  endTime             DateTime  @map("end_time")
+  purpose             String
+  status              String    @default("Confirmed") // Confirmed, Completed, Cancelled, No_Show
+  recurrencePattern   String    @default("None") @map("recurrence_pattern") // None, Daily, Weekly, Custom
+  recurrenceGroupId   String?   @map("recurrence_group_id")
+  isLateCancellation  Boolean   @default(false) @map("is_late_cancellation")
+  cancellationReason  String?   @map("cancellation_reason")
+  cancelledAt         DateTime? @map("cancelled_at")
+  version             Int       @default(1)
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  user                User      @relation(fields: [userId], references: [id])
+  resource            Resource  @relation(fields: [resourceId], references: [id])
+  modifications       BookingModification[]
+  linkedCheckouts     EquipmentCheckout[]
+  
+  @@map("bookings")
+  @@index([resourceId, startTime, endTime])
+  @@index([userId, startTime])
+  @@index([status])
+}
+
+model BookingModification {
+  id          String   @id @default(uuid())
+  bookingId   String   @map("booking_id")
+  field       String   // "start_time", "end_time", "status", etc.
+  oldValue    String   @map("old_value")
+  newValue    String   @map("new_value")
+  modifiedBy  String   @map("modified_by")
+  modifiedAt  DateTime @default(now()) @map("modified_at")
+  
+  booking     Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  
+  @@map("booking_modifications")
+}
+
+model WaitlistEntry {
+  id                String    @id @default(uuid())
+  userId            String    @map("user_id")
+  resourceId        String    @map("resource_id")
+  desiredStartTime  DateTime  @map("desired_start_time")
+  desiredEndTime    DateTime  @map("desired_end_time")
+  status            String    @default("Pending") // Pending, Notified, Confirmed, Declined, Expired
+  notifiedAt        DateTime? @map("notified_at")
+  expiresAt         DateTime? @map("expires_at") // 15 min after notifiedAt
+  position          Int       // Queue position
+  createdAt         DateTime  @default(now()) @map("created_at")
+  
+  user              User      @relation(fields: [userId], references: [id])
+  resource          Resource  @relation(fields: [resourceId], references: [id])
+  
+  @@map("waitlist_entries")
+  @@index([resourceId, status, position])
+}
+
+model EquipmentCheckout {
+  id                    String    @id @default(uuid())
+  equipmentId           String    @map("equipment_id")
+  userId                String    @map("user_id")
+  linkedBookingId       String?   @map("linked_booking_id")
+  checkoutTime          DateTime  @map("checkout_time")
+  expectedReturnTime    DateTime  @map("expected_return_time")
+  actualReturnTime      DateTime? @map("actual_return_time")
+  conditionAtCheckout   String?   @map("condition_at_checkout")
+  conditionAtReturn     String?   @map("condition_at_return")
+  isOverdue             Boolean   @default(false) @map("is_overdue")
+  createdAt             DateTime  @default(now()) @map("created_at")
+  
+  equipment             Resource  @relation(fields: [equipmentId], references: [id])
+  user                  User      @relation(fields: [userId], references: [id])
+  linkedBooking         Booking?  @relation(fields: [linkedBookingId], references: [id])
+  
+  @@map("equipment_checkouts")
+  @@index([userId, actualReturnTime])
+}
+
+model IoTSensor {
+  id                  String    @id @default(uuid())
+  resourceId          String    @map("resource_id")
+  sensorType          String    @map("sensor_type") // occupancy, temperature, humidity, equipment_status
+  mqttTopic           String?   @map("mqtt_topic")
+  lastReading         String?   @map("last_reading") // JSON String
+  lastCommunication   DateTime? @map("last_communication")
+  isOnline            Boolean   @default(true) @map("is_online")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  updatedAt           DateTime  @updatedAt @map("updated_at")
+  
+  resource            Resource  @relation(fields: [resourceId], references: [id])
+  readings            IoTReading[]
+  
+  @@map("iot_sensors")
+}
+
+model IoTReading {
+  id          String   @id @default(uuid())
+  sensorId    String   @map("sensor_id")
+  data        String   // JSON String
+  recordedAt  DateTime @default(now()) @map("recorded_at")
+  
+  sensor      IoTSensor @relation(fields: [sensorId], references: [id], onDelete: Cascade)
+  
+  @@map("iot_readings")
+  @@index([sensorId, recordedAt])
+}
+
+model MaintenanceSchedule {
+  id          String    @id @default(uuid())
+  resourceId  String    @map("resource_id")
+  startTime   DateTime  @map("start_time")
+  endTime     DateTime  @map("end_time")
+  reason      String
+  notes       String?
+  createdBy   String    @map("created_by")
+  status      String    @default("Scheduled")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  resource    Resource  @relation(fields: [resourceId], references: [id])
+  
+  @@map("maintenance_schedules")
+}
+
+model Notification {
+  id          String    @id @default(uuid())
+  userId      String    @map("user_id")
+  type        String    // booking_confirmation, booking_reminder, etc.
+  channel     String    // email, sms, in_app
+  recipient   String    // Email address or phone number
+  payload     String    // JSON String for notification content
+  status      String    @default("Pending") // Pending, Sent, Failed, Dead_Letter
+  retryCount  Int       @default(0) @map("retry_count")
+  sentAt      DateTime? @map("sent_at")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  
+  user        User      @relation(fields: [userId], references: [id])
+  
+  @@map("notifications")
+  @@index([status, createdAt])
+}
+
+model AuditLog {
+  id          String   @id @default(uuid())
+  userId      String?  @map("user_id")
+  action      String   // CREATE_BOOKING, CANCEL_BOOKING, etc.
+  entityType  String   @map("entity_type")
+  entityId    String   @map("entity_id")
+  changes     String?  // JSON String before/after snapshot
+  ipAddress   String?  @map("ip_address")
+  createdAt   DateTime @default(now()) @map("created_at")
+  
+  user        User?    @relation(fields: [userId], references: [id])
+  
+  @@map("audit_logs")
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+}
+
+model SystemConfig {
+  key         String   @id
+  value       String   // JSON String
+  description String?
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  updatedBy   String?  @map("updated_by")
+  
+  @@map("system_config")
+}
