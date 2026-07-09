@@ -6,11 +6,14 @@ const router = express.Router();
 
 router.use(authenticateJWT);
 
-// Public to all authenticated users — read-only sensor data
-router.get('/sensors', iotController.getAllSensors.bind(iotController));
-router.get('/sensors/:resourceId', iotController.getResourceSensors.bind(iotController));
+// IoT sensor data is operational telemetry — Faculty, Facility_Manager, Administrator only
+// Students are not authorised to access raw sensor data
+const canViewSensors = enforceRole(['Faculty', 'Facility_Manager', 'Administrator']);
 
-// Simulation endpoint — Admin only
+router.get('/sensors', canViewSensors, iotController.getAllSensors.bind(iotController));
+router.get('/sensors/:resourceId', canViewSensors, iotController.getResourceSensors.bind(iotController));
+
+// Simulation — Administrator only
 router.post(
   '/simulate',
   enforceRole(['Administrator']),

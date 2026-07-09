@@ -10,6 +10,25 @@ import Dashboard from './pages/Dashboard';
 import ResourceDiscovery from './pages/ResourceDiscovery';
 import AdminPanel from './pages/AdminPanel';
 import ConciergeChat from './components/ConciergeChat';
+import toast from 'react-hot-toast';
+
+/** Renders children only if the logged-in user has one of the allowed roles.
+ *  Otherwise redirects to '/' and shows a permission error toast. */
+function RoleGuard({ children, allowedRoles }: { children: React.ReactNode; allowedRoles: string[] }) {
+  const { user } = useAuth();
+  const isDenied = !user || !allowedRoles.includes(user.role);
+
+  useEffect(() => {
+    if (isDenied) {
+      toast.error('⛔ Access denied: You do not have permission to view this page.');
+    }
+  }, [isDenied]);
+
+  if (isDenied) {
+    return <Navigate to="/" replace />;
+  }
+  return <>{children}</>;
+}
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -57,7 +76,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
             <span>🔍</span>
             <span>Book Resources</span>
           </Link>
-          {user.role === 'Administrator' && (
+          {(user.role === 'Administrator' || user.role === 'Facility_Manager') && (
             <Link to="/admin" className="flex items-center space-x-3 px-4 py-2.5 rounded-lg hover:bg-slate-100 transition-all text-slate-600 hover:text-slate-900 font-medium">
               <span>⚙️</span>
               <span>Admin Panel</span>
@@ -105,7 +124,16 @@ function App() {
         <Route path="/auth/callback" element={<AuthCallback />} />
         <Route path="/" element={<ProtectedLayout><Dashboard /></ProtectedLayout>} />
         <Route path="/discovery" element={<ProtectedLayout><ResourceDiscovery /></ProtectedLayout>} />
-        <Route path="/admin" element={<ProtectedLayout><AdminPanel /></ProtectedLayout>} />
+        <Route
+          path="/admin"
+          element={
+            <ProtectedLayout>
+              <RoleGuard allowedRoles={['Administrator', 'Facility_Manager']}>
+                <AdminPanel />
+              </RoleGuard>
+            </ProtectedLayout>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

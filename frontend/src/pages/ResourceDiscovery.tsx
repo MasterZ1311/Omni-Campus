@@ -109,6 +109,10 @@ export default function ResourceDiscovery() {
   };
 
   const handleRoomClick = (roomName: string) => {
+    if (user?.role === 'Student') {
+      toast.error('👁️ View only — Students cannot book rooms. Contact Faculty or staff.');
+      return;
+    }
     const room = resourceData.resources.find((r: any) => r.name === roomName);
     if (room) {
       setSelectedResource(room);
@@ -349,18 +353,24 @@ export default function ResourceDiscovery() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
           <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Campus Services & Resources</h1>
-          <p className="text-slate-500 mt-2">Book classrooms, borrow equipment, view vacant schedules, or request staff transport.</p>
+          {user?.role === 'Student' ? (
+            <p className="text-slate-500 mt-2">View available classrooms, equipment, and campus schedules.</p>
+          ) : (
+            <p className="text-slate-500 mt-2">Book classrooms, borrow equipment, view vacant schedules, or request staff transport.</p>
+          )}
         </div>
-        <button
-          onClick={() => {
-            fetchMockQrResources();
-            setShowQrModal(true);
-          }}
-          className="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-red-500/10 flex items-center space-x-2"
-        >
-          <span>📷</span>
-          <span>Scan Equipment QR</span>
-        </button>
+        {user?.role !== 'Student' && (
+          <button
+            onClick={() => {
+              fetchMockQrResources();
+              setShowQrModal(true);
+            }}
+            className="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-red-500/10 flex items-center space-x-2"
+          >
+            <span>📷</span>
+            <span>Scan Equipment QR</span>
+          </button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -566,22 +576,29 @@ export default function ResourceDiscovery() {
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <button
-                      onClick={() => {
-                        setSelectedResource(resource);
-                        const now = new Date();
-                        now.setMinutes(0);
-                        now.setSeconds(0);
-                        now.setMilliseconds(0);
-                        setStartTime(format(addHours(now, 1), "yyyy-MM-dd'T'HH:mm"));
-                        setEndTime(format(addHours(now, 2), "yyyy-MM-dd'T'HH:mm"));
-                        setExpectedReturn(format(addHours(now, 24), "yyyy-MM-dd'T'HH:mm"));
-                      }}
-                      className="w-full py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-transparent font-semibold rounded-xl text-sm transition-all duration-300 flex items-center justify-center space-x-2"
-                    >
-                      <span>Select Item</span>
-                      <span>→</span>
-                    </button>
+                    {user?.role === 'Student' ? (
+                      <div className="w-full py-2 bg-slate-50 border border-slate-200 text-slate-500 font-semibold rounded-xl text-sm flex items-center justify-center space-x-2 cursor-default">
+                        <span>👁️</span>
+                        <span>View Only — Contact Faculty to Book</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setSelectedResource(resource);
+                          const now = new Date();
+                          now.setMinutes(0);
+                          now.setSeconds(0);
+                          now.setMilliseconds(0);
+                          setStartTime(format(addHours(now, 1), "yyyy-MM-dd'T'HH:mm"));
+                          setEndTime(format(addHours(now, 2), "yyyy-MM-dd'T'HH:mm"));
+                          setExpectedReturn(format(addHours(now, 24), "yyyy-MM-dd'T'HH:mm"));
+                        }}
+                        className="w-full py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-transparent font-semibold rounded-xl text-sm transition-all duration-300 flex items-center justify-center space-x-2"
+                      >
+                        <span>Select Item</span>
+                        <span>→</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
@@ -911,13 +928,15 @@ export default function ResourceDiscovery() {
                   >
                     Confirm Booking Reservation
                   </button>
-                  <button
-                    type="button"
-                    onClick={handleJoinWaitlist}
-                    className="px-6 py-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition-all"
-                  >
-                    Join Waitlist
-                  </button>
+                  {user?.role !== 'Student' && (
+                    <button
+                      type="button"
+                      onClick={handleJoinWaitlist}
+                      className="px-6 py-3 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-semibold rounded-xl text-sm transition-all"
+                    >
+                      Join Waitlist
+                    </button>
+                  )}
                 </div>
               </form>
             )}
