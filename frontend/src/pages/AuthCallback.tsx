@@ -52,9 +52,9 @@ export default function AuthCallback() {
   }, [searchParams, login, navigate]);
 
   return (
-    <div className="min-h-screen bg-slate-950 flex flex-col justify-center items-center">
-      <div className="text-violet-500 font-medium text-lg animate-pulse">
-        Completing OIDC Authentication...
+    <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center font-sans text-xs">
+      <div className="text-slate-500 font-bold uppercase tracking-wider animate-pulse">
+        Completing SSO Authentication...
       </div>
     </div>
   );
