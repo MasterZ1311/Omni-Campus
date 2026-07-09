@@ -175,6 +175,92 @@ export class ResourceService {
     
     return this.parseResource(resource);
   }
+
+  async getVacantClassrooms() {
+    const classrooms = await prisma.resource.findMany({
+      where: {
+        type: 'Classroom',
+        deletedAt: null,
+        status: 'Available',
+      },
+    });
+
+    const now = new Date();
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const vacantClassrooms = [];
+
+    const formatTime = (d: Date) => {
+      return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+    };
+
+    for (const r of classrooms) {
+      const bookings = await prisma.booking.findMany({
+        where: {
+          resourceId: r.id,
+          status: 'Confirmed',
+          startTime: { lte: endOfDay },
+          endTime: { gte: now },
+        },
+        orderBy: { startTime: 'asc' },
+      });
+
+      const maintenance = await prisma.maintenanceSchedule.findMany({
+        where: {
+          resourceId: r.id,
+          status: { in: ['Scheduled', 'In_Progress'] },
+          startTime: { lte: endOfDay },
+          endTime: { gte: now },
+        },
+        orderBy: { startTime: 'asc' },
+      });
+
+      const blockouts = [
+        ...bookings.map(b => ({ startTime: b.startTime, endTime: b.endTime, type: 'Booking' })),
+        ...maintenance.map(m => ({ startTime: m.startTime, endTime: m.endTime, type: 'Maintenance' })),
+      ].sort((a, b) => a.startTime.getTime() - b.startTime.getTime());
+
+      const currentBlockout = blockouts.find(b => b.startTime <= now && b.endTime >= now);
+
+      if (currentBlockout) {
+        vacantClassrooms.push({
+          ...this.parseResource(r),
+          isVacant: false,
+          currentStatus: 'Occupied',
+          until: currentBlockout.endTime,
+          message: `Occupied until ${formatTime(currentBlockout.endTime)}`,
+        });
+      } else {
+        const nextBlockout = blockouts.find(b => b.startTime > now);
+        if (nextBlockout) {
+          const diffMs = nextBlockout.startTime.getTime() - now.getTime();
+          const diffMins = Math.floor(diffMs / 60000);
+          const hours = Math.floor(diffMins / 60);
+          const mins = diffMins % 60;
+          const durationStr = hours > 0 ? `${hours}h ${mins}m` : `${mins}m`;
+
+          vacantClassrooms.push({
+            ...this.parseResource(r),
+            isVacant: true,
+            currentStatus: 'Vacant',
+            until: nextBlockout.startTime,
+            message: `Vacant for the next ${durationStr}`,
+          });
+        } else {
+          vacantClassrooms.push({
+            ...this.parseResource(r),
+            isVacant: true,
+            currentStatus: 'Vacant',
+            until: null,
+            message: 'Vacant for the rest of the day',
+          });
+        }
+      }
+    }
+
+    return vacantClassrooms;
+  }
 }
 
 export default new ResourceService();

@@ -18,6 +18,8 @@ import adminRoutes from './routes/admin.routes';
 import waitlistRoutes from './routes/waitlist.routes';
 import equipmentRoutes from './routes/equipment.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
+import transportRoutes from './routes/transport.routes';
+import staffRoutes from './routes/staff.routes';
 
 import notificationService from './services/notification.service';
 import waitlistService from './services/waitlist.service';
@@ -81,6 +83,8 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/waitlist', waitlistRoutes);
 app.use('/api/equipment', equipmentRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
+app.use('/api/transport', transportRoutes);
+app.use('/api/staff', staffRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

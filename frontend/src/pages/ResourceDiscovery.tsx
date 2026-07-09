@@ -9,7 +9,10 @@ export default function ResourceDiscovery() {
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
-  // Search/Filter states
+  // Top level tabs
+  const [activeTab, setActiveTab] = useState<'resources' | 'classrooms' | 'transport'>('resources');
+
+  // Search/Filter states for Rooms & Equipment
   const [search, setSearch] = useState('');
   const [type, setType] = useState('');
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
@@ -26,7 +29,15 @@ export default function ResourceDiscovery() {
   const [expectedReturn, setExpectedReturn] = useState('');
   const [checkoutNotes, setCheckoutNotes] = useState('');
 
-  // Queries
+  // Transport state
+  const [routeFilter, setRouteFilter] = useState('');
+  const [showRequestModal, setShowRequestModal] = useState(false);
+  const [pickup, setPickup] = useState('');
+  const [dropoff, setDropoff] = useState('');
+  const [requestedTime, setRequestedTime] = useState('');
+  const [passengerCount, setPassengerCount] = useState(1);
+
+  // Queries - Rooms & Equipment
   const { data: resourceData = { resources: [] }, isLoading: loadingResources } = useQuery({
     queryKey: ['resources', type, search, selectedAmenities],
     queryFn: async () => {
@@ -40,16 +51,47 @@ export default function ResourceDiscovery() {
       });
       return res.data;
     },
+    enabled: activeTab === 'resources',
   });
 
-  const { data: availability = null, refetch: refetchAvailability } = useQuery({
+  // Queries - Vacant Classrooms
+  const { data: vacantClassrooms = [], isLoading: loadingVacant } = useQuery({
+    queryKey: ['vacant-classrooms'],
+    queryFn: async () => {
+      const res = await api.get('/api/resources/classrooms/vacant');
+      return res.data;
+    },
+    enabled: activeTab === 'classrooms',
+    refetchInterval: 30000, // Update countdowns every 30 seconds
+  });
+
+  // Queries - Transport
+  const { data: vehicles = [], isLoading: loadingVehicles } = useQuery({
+    queryKey: ['vehicles'],
+    queryFn: async () => {
+      const res = await api.get('/api/transport/vehicles');
+      return res.data;
+    },
+    enabled: activeTab === 'transport',
+  });
+
+  const { data: schedules = [], isLoading: loadingSchedules } = useQuery({
+    queryKey: ['schedules'],
+    queryFn: async () => {
+      const res = await api.get('/api/transport/schedules');
+      return res.data;
+    },
+    enabled: activeTab === 'transport',
+  });
+
+  const { data: availability = null } = useQuery({
     queryKey: ['availability', selectedResource?.id],
     queryFn: async () => {
       if (!selectedResource) return null;
       const res = await api.get(`/api/resources/${selectedResource.id}/availability`);
       return res.data;
     },
-    enabled: !!selectedResource,
+    enabled: !!selectedResource && activeTab !== 'transport',
   });
 
   // Mutations
@@ -71,6 +113,7 @@ export default function ResourceDiscovery() {
       }
       setSelectedResource(null);
       queryClient.invalidateQueries({ queryKey: ['bookings'] });
+      queryClient.invalidateQueries({ queryKey: ['vacant-classrooms'] });
     },
     onError: (err: any) => {
       const responseData = err.response?.data;
@@ -115,6 +158,21 @@ export default function ResourceDiscovery() {
     },
     onError: (err: any) => {
       toast.error(err.response?.data?.error || 'Failed to join waitlist');
+    },
+  });
+
+  const requestTransportMutation = useMutation({
+    mutationFn: async (payload: any) => {
+      const res = await api.post('/api/transport/request', payload);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success(data.message || 'Transport request processed');
+      setShowRequestModal(false);
+      queryClient.invalidateQueries({ queryKey: ['vehicles'] });
+    },
+    onError: (err: any) => {
+      toast.error(err.response?.data?.error || 'Transport request failed');
     },
   });
 
@@ -167,124 +225,344 @@ export default function ResourceDiscovery() {
     });
   };
 
+  const handleTransportRequestSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    requestTransportMutation.mutate({
+      pickupLocation: pickup,
+      dropoffLocation: dropoff,
+      requestedTime: new Date(requestedTime).toISOString(),
+      passengerCount,
+    });
+  };
+
   const allAmenities = ['Projector', 'Whiteboard', 'AC', 'Wi-Fi', 'Smart Board', 'Video Conference', 'Printer'];
 
   return (
     <div className="space-y-8">
       {/* Banner */}
       <div>
-        <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Book Resources</h1>
-        <p className="text-slate-500 mt-2">Search, configure, and secure campus classrooms, laboratories, and equipment.</p>
+        <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Campus Services & Resources</h1>
+        <p className="text-slate-500 mt-2">Book classrooms, borrow equipment, view vacant schedules, or request staff transport.</p>
       </div>
 
-      {/* Catalog Filters */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-3 gap-6 shadow-sm">
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Search Catalog</label>
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Room 101, Computer Lab..."
-            className="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-900 text-sm"
-          />
-        </div>
+      {/* Tabs */}
+      <div className="flex border-b border-slate-200 space-x-6">
+        <button
+          onClick={() => setActiveTab('resources')}
+          className={`pb-4 text-sm font-semibold transition-all border-b-2 ${
+            activeTab === 'resources' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          🏢 Rooms & Equipment
+        </button>
+        <button
+          onClick={() => setActiveTab('classrooms')}
+          className={`pb-4 text-sm font-semibold transition-all border-b-2 ${
+            activeTab === 'classrooms' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          🔍 Classroom Finder
+        </button>
+        <button
+          onClick={() => setActiveTab('transport')}
+          className={`pb-4 text-sm font-semibold transition-all border-b-2 ${
+            activeTab === 'transport' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          🚌 Staff Transport
+        </button>
+      </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Category Type</label>
-          <select
-            value={type}
-            onChange={(e) => setType(e.target.value)}
-            className="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-900 text-sm"
-          >
-            <option value="">All Categories</option>
-            <option value="Classroom">Classroom</option>
-            <option value="Lab">Lab</option>
-            <option value="Equipment">Equipment</option>
-            <option value="Meeting_Room">Meeting Room</option>
-          </select>
-        </div>
+      {/* View Panels */}
+      {activeTab === 'resources' && (
+        <>
+          {/* Catalog Filters */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-6 grid grid-cols-1 md:grid-cols-3 gap-6 shadow-sm">
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Search Catalog</label>
+              <input
+                type="text"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Room 101, Computer Lab..."
+                className="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-900 text-sm"
+              />
+            </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Amenities</label>
-          <div className="flex flex-wrap gap-2 mt-1">
-            {allAmenities.map(amenity => (
-              <button
-                key={amenity}
-                onClick={() => toggleAmenity(amenity)}
-                className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
-                  selectedAmenities.includes(amenity)
-                    ? 'bg-red-600 border-red-500 text-white shadow-md'
-                    : 'bg-slate-100 border-slate-200 text-slate-600 hover:border-slate-300'
-                }`}
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Category Type</label>
+              <select
+                value={type}
+                onChange={(e) => setType(e.target.value)}
+                className="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-300 focus:outline-none focus:ring-2 focus:ring-red-500/20 focus:border-red-500 text-slate-900 text-sm"
               >
-                {amenity}
-              </button>
-            ))}
-          </div>
-        </div>
-      </div>
+                <option value="">All Categories</option>
+                <option value="Classroom">Classroom</option>
+                <option value="Lab">Lab</option>
+                <option value="Equipment">Equipment</option>
+                <option value="Meeting_Room">Meeting Room</option>
+              </select>
+            </div>
 
-      {/* Grid List */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {loadingResources ? (
-          <div className="text-slate-400 col-span-full">Loading catalog items...</div>
-        ) : resourceData.resources.length === 0 ? (
-          <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-500 col-span-full shadow-sm">
-            No resources match the selected search filters.
-          </div>
-        ) : (
-          resourceData.resources.map((resource: any) => (
-            <div key={resource.id} className="glass-card p-6 rounded-2xl flex flex-col justify-between h-64 shadow-sm border border-slate-200 bg-white">
-              <div>
-                <div className="flex justify-between items-start">
-                  <h3 className="font-bold text-slate-800 text-lg tracking-tight truncate w-3/4">{resource.name}</h3>
-                  <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold uppercase">
-                    {resource.type}
-                  </span>
-                </div>
-                <p className="text-sm text-slate-500 mt-2">📍 {resource.location}</p>
-                <p className="text-xs text-slate-400 mt-1">Capacity: {resource.capacity ?? 'N/A'} people</p>
-                
-                <div className="flex flex-wrap gap-1 mt-3">
-                  {resource.amenities?.slice(0, 3).map((a: string) => (
-                    <span key={a} className="bg-slate-50 border border-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded-md font-medium">
-                      {a}
-                    </span>
-                  ))}
-                  {resource.amenities?.length > 3 && (
-                    <span className="text-[10px] text-slate-400 self-center font-bold">+{resource.amenities.length - 3} more</span>
-                  )}
-                </div>
-              </div>
-
-              <div className="mt-4 pt-4 border-t border-slate-100">
-                <button
-                  onClick={() => {
-                    setSelectedResource(resource);
-                    const now = new Date();
-                    now.setMinutes(0);
-                    now.setSeconds(0);
-                    now.setMilliseconds(0);
-                    setStartTime(format(addHours(now, 1), "yyyy-MM-dd'T'HH:mm"));
-                    setEndTime(format(addHours(now, 2), "yyyy-MM-dd'T'HH:mm"));
-                    setExpectedReturn(format(addHours(now, 24), "yyyy-MM-dd'T'HH:mm"));
-                  }}
-                  className="w-full py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-transparent font-semibold rounded-xl text-sm transition-all duration-300 flex items-center justify-center space-x-2"
-                >
-                  <span>Select Item</span>
-                  <span>→</span>
-                </button>
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Amenities</label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {allAmenities.map(amenity => (
+                  <button
+                    key={amenity}
+                    onClick={() => toggleAmenity(amenity)}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-all border ${
+                      selectedAmenities.includes(amenity)
+                        ? 'bg-red-600 border-red-500 text-white shadow-md'
+                        : 'bg-slate-100 border-slate-200 text-slate-600 hover:border-slate-300'
+                    }`}
+                  >
+                    {amenity}
+                  </button>
+                ))}
               </div>
             </div>
-          ))
-        )}
-      </div>
+          </div>
+
+          {/* Grid List */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {loadingResources ? (
+              <div className="text-slate-400 col-span-full">Loading catalog items...</div>
+            ) : resourceData.resources.length === 0 ? (
+              <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-500 col-span-full shadow-sm">
+                No resources match the selected search filters.
+              </div>
+            ) : (
+              resourceData.resources.map((resource: any) => (
+                <div key={resource.id} className="glass-card p-6 rounded-2xl flex flex-col justify-between h-64 shadow-sm border border-slate-200 bg-white">
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-bold text-slate-800 text-lg tracking-tight truncate w-3/4">{resource.name}</h3>
+                      <span className="bg-slate-100 text-slate-700 text-xs px-2.5 py-1 rounded-full font-bold uppercase">
+                        {resource.type}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-500 mt-2">📍 {resource.location}</p>
+                    <p className="text-xs text-slate-400 mt-1">Capacity: {resource.capacity ?? 'N/A'} people</p>
+                    
+                    <div className="flex flex-wrap gap-1 mt-3">
+                      {resource.amenities?.slice(0, 3).map((a: string) => (
+                        <span key={a} className="bg-slate-50 border border-slate-200 text-slate-600 text-[10px] px-2 py-0.5 rounded-md font-medium">
+                          {a}
+                        </span>
+                      ))}
+                      {resource.amenities?.length > 3 && (
+                        <span className="text-[10px] text-slate-400 self-center font-bold">+{resource.amenities.length - 3} more</span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <button
+                      onClick={() => {
+                        setSelectedResource(resource);
+                        const now = new Date();
+                        now.setMinutes(0);
+                        now.setSeconds(0);
+                        now.setMilliseconds(0);
+                        setStartTime(format(addHours(now, 1), "yyyy-MM-dd'T'HH:mm"));
+                        setEndTime(format(addHours(now, 2), "yyyy-MM-dd'T'HH:mm"));
+                        setExpectedReturn(format(addHours(now, 24), "yyyy-MM-dd'T'HH:mm"));
+                      }}
+                      className="w-full py-2 bg-red-50 hover:bg-red-600 text-red-600 hover:text-white border border-red-200 hover:border-transparent font-semibold rounded-xl text-sm transition-all duration-300 flex items-center justify-center space-x-2"
+                    >
+                      <span>Select Item</span>
+                      <span>→</span>
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Classroom Finder */}
+      {activeTab === 'classrooms' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold text-slate-800">Classroom Finder & Timetable Scanner</h2>
+            <button
+              onClick={() => queryClient.invalidateQueries({ queryKey: ['vacant-classrooms'] })}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition-all"
+            >
+              🔄 Refresh Vacancies
+            </button>
+          </div>
+
+          {loadingVacant ? (
+            <div className="text-slate-400">Scanning real-time schedules...</div>
+          ) : vacantClassrooms.length === 0 ? (
+            <div className="bg-white border border-slate-200 rounded-2xl p-8 text-center text-slate-500 shadow-sm">
+              No classrooms registered in the system.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {vacantClassrooms.map((room: any) => (
+                <div key={room.id} className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm flex flex-col justify-between h-64 glass-card">
+                  <div>
+                    <div className="flex justify-between items-start">
+                      <h3 className="font-bold text-slate-800 text-lg truncate w-3/4">{room.name}</h3>
+                      <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
+                        room.isVacant 
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' 
+                          : 'bg-rose-50 text-rose-700 border border-rose-200'
+                      }`}>
+                        {room.currentStatus}
+                      </span>
+                    </div>
+                    <p className="text-sm text-slate-500 mt-2">📍 {room.location}</p>
+                    <p className="text-xs text-slate-400 mt-1">Capacity: {room.capacity} seats</p>
+                    
+                    <div className="mt-4 p-3 bg-slate-50 rounded-xl border border-slate-100">
+                      <p className={`text-sm font-semibold ${room.isVacant ? 'text-emerald-700' : 'text-rose-700'}`}>
+                        {room.message}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 pt-4 border-t border-slate-100">
+                    <button
+                      onClick={() => {
+                        setSelectedResource(room);
+                        const now = new Date();
+                        now.setMinutes(0);
+                        now.setSeconds(0);
+                        now.setMilliseconds(0);
+                        setStartTime(format(addHours(now, 1), "yyyy-MM-dd'T'HH:mm"));
+                        setEndTime(format(addHours(now, 2), "yyyy-MM-dd'T'HH:mm"));
+                        setPurpose('Immediate Study / Lecture Session');
+                      }}
+                      className="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition-all duration-300 flex items-center justify-center space-x-1"
+                    >
+                      <span>⚡ One-Click Quick Book</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Staff Transport Hub */}
+      {activeTab === 'transport' && (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Schedules list */}
+          <div className="lg:col-span-2 space-y-6">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <h2 className="text-2xl font-bold text-slate-800">Fixed Routes Timetables</h2>
+              <input
+                type="text"
+                value={routeFilter}
+                onChange={(e) => setRouteFilter(e.target.value)}
+                placeholder="Filter route stop..."
+                className="px-4 py-2 text-xs rounded-lg bg-white border border-slate-300 text-slate-900 focus:ring-2 focus:ring-red-500/20 focus:outline-none"
+              />
+            </div>
+
+            {loadingSchedules ? (
+              <div className="text-slate-400">Loading timetables...</div>
+            ) : (
+              <div className="space-y-4">
+                {schedules
+                  .filter((s: any) => {
+                    const stops: string[] = JSON.parse(s.route || '[]');
+                    return stops.some(stop => stop.toLowerCase().includes(routeFilter.toLowerCase()));
+                  })
+                  .map((sched: any) => {
+                    const stops: string[] = JSON.parse(sched.route || '[]');
+                    return (
+                      <div key={sched.id} className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm">
+                        <div className="flex justify-between items-center">
+                          <h3 className="font-bold text-slate-800">{sched.vehicle.name}</h3>
+                          <span className="text-xs bg-red-50 text-red-700 px-2 py-0.5 rounded border border-red-100 font-semibold uppercase">
+                            {sched.vehicle.type}
+                          </span>
+                        </div>
+                        <div className="mt-3 space-y-2">
+                          <div className="flex items-center text-sm text-slate-600 font-medium">
+                            <span className="mr-2">⏰</span>
+                            <span>
+                              {format(new Date(sched.startTime), 'h:mm a')} - {format(new Date(sched.endTime), 'h:mm a')}
+                            </span>
+                          </div>
+                          <div className="flex items-start text-xs text-slate-500">
+                            <span className="mr-2">📍</span>
+                            <span>Stops: {stops.join(' ➔ ')}</span>
+                          </div>
+                        </div>
+                        <div className="mt-3 pt-3 border-t border-slate-100 flex justify-between text-xs text-slate-400">
+                          <span>Driver: {sched.vehicle.driverName || 'N/A'}</span>
+                          <span>Plate: {sched.vehicle.licensePlate || 'N/A'}</span>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+          </div>
+
+          {/* On-Demand dispatches & Roster availability */}
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-slate-800">On-Demand Dispatch</h2>
+
+            {user?.role === 'Student' ? (
+              <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 text-xs text-slate-500">
+                ⚠️ On-demand vehicle dispatch requests are restricted to authorized Faculty and System Staff profiles.
+              </div>
+            ) : (
+              <button
+                onClick={() => {
+                  setPickup('');
+                  setDropoff('');
+                  setRequestedTime(format(addHours(new Date(), 1), "yyyy-MM-dd'T'HH:mm"));
+                  setPassengerCount(1);
+                  setShowRequestModal(true);
+                }}
+                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-red-500/10 flex justify-center items-center space-x-2"
+              >
+                <span>➕</span>
+                <span>Request On-Demand Dispatch</span>
+              </button>
+            )}
+
+            <div className="space-y-4">
+              <h3 className="text-sm font-bold text-slate-500 uppercase tracking-wider">Fleet Status & Available Seats</h3>
+              {loadingVehicles ? (
+                <div className="text-slate-400 text-xs">Loading fleet...</div>
+              ) : (
+                vehicles.map((v: any) => (
+                  <div key={v.id} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm flex justify-between items-center">
+                    <div>
+                      <h4 className="font-bold text-slate-800 text-sm">{v.name}</h4>
+                      <p className="text-xs text-slate-400">Plate: {v.licensePlate ?? 'N/A'}</p>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-xs px-2 py-0.5 rounded font-bold uppercase ${
+                        v.status === 'Active' ? 'bg-emerald-50 text-emerald-700' : 'bg-slate-100 text-slate-400'
+                      }`}>
+                        {v.status.replace(/_/g, ' ')}
+                      </span>
+                      <p className="text-[11px] text-slate-500 mt-1">{v.remainingSeats} / {v.capacity} seats free</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Booking / Checkout Modal overlay */}
-      {selectedResource && (
+      {selectedResource && activeTab !== 'transport' && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center p-4 z-50 overflow-y-auto">
-          <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl p-8 space-y-6 my-8">
+          <div className="w-full max-w-2xl bg-white border border-slate-200 rounded-2xl shadow-2xl p-8 space-y-6 my-8 animate-in fade-in-50 duration-200">
             <div className="flex justify-between items-start">
               <div>
                 <h2 className="text-2xl font-bold text-slate-800">{selectedResource.name}</h2>
@@ -435,6 +713,84 @@ export default function ResourceDiscovery() {
                 </div>
               </form>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* On-Demand Transport Dispatch Request Modal */}
+      {showRequestModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center p-4 z-50 overflow-y-auto">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl p-8 space-y-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Request On-Demand Dispatch</h2>
+                <p className="text-xs text-slate-400 mt-1">Submit pickup/dropoff requirements for campus staff fleet.</p>
+              </div>
+              <button
+                onClick={() => setShowRequestModal(false)}
+                className="text-slate-500 hover:text-slate-700 font-bold p-2 bg-slate-100 rounded-full text-xs"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <form onSubmit={handleTransportRequestSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Pickup Location</label>
+                <input
+                  type="text"
+                  value={pickup}
+                  onChange={(e) => setPickup(e.target.value)}
+                  placeholder="Main Gate, Library..."
+                  className="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm focus:ring-2 focus:ring-red-500/20 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Dropoff Location</label>
+                <input
+                  type="text"
+                  value={dropoff}
+                  onChange={(e) => setDropoff(e.target.value)}
+                  placeholder="Engineering Building, Dean Office..."
+                  className="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm focus:ring-2 focus:ring-red-500/20 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Requested Time</label>
+                  <input
+                    type="datetime-local"
+                    value={requestedTime}
+                    onChange={(e) => setRequestedTime(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm focus:ring-2 focus:ring-red-500/20 focus:outline-none"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Passenger Count</label>
+                  <input
+                    type="number"
+                    value={passengerCount}
+                    onChange={(e) => setPassengerCount(parseInt(e.target.value, 10))}
+                    min={1}
+                    className="w-full px-4 py-2.5 rounded-lg bg-white border border-slate-300 text-slate-900 text-sm focus:ring-2 focus:ring-red-500/20 focus:outline-none"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={requestTransportMutation.isPending}
+                className="w-full py-3 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-red-500/10"
+              >
+                {requestTransportMutation.isPending ? 'Requesting...' : 'Request Dispatch'}
+              </button>
+            </form>
           </div>
         </div>
       )}

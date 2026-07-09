@@ -6,6 +6,7 @@ import { uploadMiddleware } from '../middleware/upload.middleware';
 const router = express.Router();
 
 router.get('/', authenticateJWT, resourceController.listResources.bind(resourceController));
+router.get('/classrooms/vacant', authenticateJWT, resourceController.getVacantClassrooms.bind(resourceController));
 router.get('/:id', authenticateJWT, resourceController.getResource.bind(resourceController));
 router.get('/:id/availability', authenticateJWT, resourceController.getAvailability.bind(resourceController));
 

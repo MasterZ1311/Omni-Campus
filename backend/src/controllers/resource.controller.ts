@@ -225,6 +225,16 @@ export class ResourceController {
       res.status(400).json({ error: error.message || 'Failed to fetch availability' });
     }
   }
+
+  async getVacantClassrooms(req: Request, res: Response) {
+    try {
+      const classrooms = await resourceService.getVacantClassrooms();
+      res.json(classrooms);
+    } catch (error: any) {
+      console.error('Get vacant classrooms error:', error);
+      res.status(500).json({ error: error.message || 'Failed to fetch vacant classrooms' });
+    }
+  }
 }
 
 export default new ResourceController();

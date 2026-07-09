@@ -5,6 +5,22 @@ const prisma = new PrismaClient();
 
 async function main() {
   console.log('Seeding database...');
+
+  // Clean existing database records
+  await prisma.staffAssignment.deleteMany({});
+  await prisma.staffProfile.deleteMany({});
+  await prisma.transportRequest.deleteMany({});
+  await prisma.vehicleSchedule.deleteMany({});
+  await prisma.vehicle.deleteMany({});
+  await prisma.auditLog.deleteMany({});
+  await prisma.notification.deleteMany({});
+  await prisma.waitlistEntry.deleteMany({});
+  await prisma.equipmentCheckout.deleteMany({});
+  await prisma.booking.deleteMany({});
+  await prisma.resourceImage.deleteMany({});
+  await prisma.resource.deleteMany({});
+  await prisma.user.deleteMany({});
+  await prisma.systemConfig.deleteMany({});
   
   // Create Admin User (local auth)
   const adminPassword = await bcrypt.hash('admin123', 10);
@@ -165,6 +181,82 @@ async function main() {
   });
   
   console.log('Created 2 sample bookings');
+
+  // Create Vehicles
+  const vehicle1 = await prisma.vehicle.create({
+    data: {
+      name: 'Main Campus Shuttle 1',
+      type: 'Shuttle',
+      capacity: 25,
+      status: 'Active',
+      driverName: 'Robert Driver',
+      licensePlate: 'CAMPUS-SH-01',
+    },
+  });
+
+  const vehicle2 = await prisma.vehicle.create({
+    data: {
+      name: 'Executive Sedan',
+      type: 'Sedan',
+      capacity: 4,
+      status: 'Active',
+      driverName: 'Alice Chauffeur',
+      licensePlate: 'CAMPUS-EXEC-02',
+    },
+  });
+
+  // Create Vehicle Schedules
+  const scheduleStart1 = new Date();
+  scheduleStart1.setHours(8, 0, 0, 0);
+  const scheduleEnd1 = new Date();
+  scheduleEnd1.setHours(17, 0, 0, 0);
+
+  await prisma.vehicleSchedule.create({
+    data: {
+      vehicleId: vehicle1.id,
+      route: JSON.stringify(['Engineering Hall', 'Science Block', 'Central Library', 'Main Gate']),
+      startTime: scheduleStart1,
+      endTime: scheduleEnd1,
+    },
+  });
+
+  // Create Staff Profiles
+  const staff1 = await prisma.staffProfile.create({
+    data: {
+      name: 'David Support',
+      email: 'david@campus.edu',
+      role: 'IT_Support',
+      status: 'Available',
+    },
+  });
+
+  const staff2 = await prisma.staffProfile.create({
+    data: {
+      name: 'Elena Assistant',
+      email: 'elena@campus.edu',
+      role: 'Lab_Assistant',
+      status: 'Available',
+    },
+  });
+
+  // Create Staff Assignment
+  const assignmentStart = new Date();
+  assignmentStart.setHours(assignmentStart.getHours() + 1);
+  const assignmentEnd = new Date(assignmentStart);
+  assignmentEnd.setHours(assignmentStart.getHours() + 2);
+
+  await prisma.staffAssignment.create({
+    data: {
+      staffId: staff1.id,
+      taskDescription: 'Configure projector setup in Engineering Hall Room 101',
+      location: 'Engineering Hall Room 101',
+      startTime: assignmentStart,
+      endTime: assignmentEnd,
+      status: 'Assigned',
+    },
+  });
+
+  console.log('Created vehicles, vehicle schedules, staff profiles, and assignments');
   
   // Create System Configuration
   await prisma.systemConfig.createMany({

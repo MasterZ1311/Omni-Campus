@@ -245,3 +245,82 @@ model SystemConfig {
   
   @@map("system_config")
 }
+
+model Vehicle {
+  id              String             @id @default(uuid())
+  name            String
+  type            String             // Bus, Shuttle, Sedan, SUV
+  capacity        Int
+  status          String             @default("Active") // Active, Maintenance, Out_Of_Service
+  driverName      String?            @map("driver_name")
+  licensePlate    String?            @map("license_plate")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  schedules        VehicleSchedule[]
+  requests         TransportRequest[]
+
+  @@map("vehicles")
+}
+
+model VehicleSchedule {
+  id              String             @id @default(uuid())
+  vehicleId       String             @map("vehicle_id")
+  route           String             // JSON String list of stops/route details
+  startTime       DateTime           @map("start_time")
+  endTime         DateTime           @map("end_time")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  vehicle         Vehicle            @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@map("vehicle_schedules")
+}
+
+model TransportRequest {
+  id              String             @id @default(uuid())
+  userId          String             @map("user_id")
+  vehicleId       String?            @map("vehicle_id")
+  pickupLocation  String             @map("pickup_location")
+  dropoffLocation String             @map("dropoff_location")
+  requestedTime   DateTime           @map("requested_time")
+  status          String             @default("Pending") // Pending, Approved, Denied, Completed
+  passengerCount  Int                @default(1) @map("passenger_count")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  vehicle         Vehicle?           @relation(fields: [vehicleId], references: [id])
+
+  @@map("transport_requests")
+}
+
+model StaffProfile {
+  id              String             @id @default(uuid())
+  name            String
+  email           String             @unique
+  role            String             // Lab_Assistant, IT_Support, Exam_Invigilator
+  status          String             @default("Available") // Available, Assigned, Break
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  assignments     StaffAssignment[]
+
+  @@map("staff_profiles")
+}
+
+model StaffAssignment {
+  id              String             @id @default(uuid())
+  staffId         String             @map("staff_id")
+  taskDescription String             @map("task_description")
+  location        String
+  startTime       DateTime           @map("start_time")
+  endTime         DateTime           @map("end_time")
+  status          String             @default("Assigned") // Assigned, In_Progress, Completed, Cancelled
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+
+  staff           StaffProfile       @relation(fields: [staffId], references: [id], onDelete: Cascade)
+
+  @@map("staff_assignments")
+}
+
