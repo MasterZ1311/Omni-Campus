@@ -1,8 +1,31 @@
 import prisma from '../config/database';
 import { CreateBookingDTO, ConflictCheckResult, TimeSlot } from '../types/booking.types';
 import waitlistService from './waitlist.service';
+import { Server } from 'socket.io';
+
+let wsServer: Server | null = null;
+
 
 export class BookingService {
+  setWsServer(io: Server) {
+    wsServer = io;
+  }
+
+  private emitResourceStatusChange(resourceId: string, status: string) {
+    if (wsServer) {
+      wsServer.to(`resource:${resourceId}`).emit('resource:status_change', {
+        resourceId,
+        status,
+        timestamp: new Date().toISOString(),
+      });
+      wsServer.to('resources:all').emit('resource:status_change', {
+        resourceId,
+        status,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  }
+
   validateDuration(startTime: Date, endTime: Date): { valid: boolean; error?: string } {
     const durationMs = endTime.getTime() - startTime.getTime();
     const durationMinutes = durationMs / (1000 * 60);
@@ -272,6 +295,9 @@ export class BookingService {
       }
     );
     
+    // Emit resource status update to all subscribed frontend clients
+    this.emitResourceStatusChange(result.resource.id, 'booked');
+
     return result;
   }
 

@@ -9,6 +9,7 @@ import AuthCallback from './pages/AuthCallback';
 import Dashboard from './pages/Dashboard';
 import ResourceDiscovery from './pages/ResourceDiscovery';
 import AdminPanel from './pages/AdminPanel';
+import ConciergeChat from './components/ConciergeChat';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
@@ -43,7 +44,7 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
           </div>
           <div>
             <h1 className="font-bold text-lg text-slate-800 tracking-wider">OMNI-CAMPUS</h1>
-            <p className="text-xs text-slate-500 font-medium">Resource Management</p>
+            <p className="text-xs text-slate-505 font-medium">Resource Management</p>
           </div>
         </div>
 
@@ -80,8 +81,9 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-7xl mx-auto w-full">
+      <main className="flex-1 p-6 md:p-10 overflow-y-auto max-w-7xl mx-auto w-full relative">
         {children}
+        <ConciergeChat />
       </main>
     </div>
   );

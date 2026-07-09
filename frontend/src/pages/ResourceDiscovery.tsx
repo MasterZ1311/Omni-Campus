@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../store/useAuth';
 import { format, addHours } from 'date-fns';
+import io from 'socket.io-client';
 
 export default function ResourceDiscovery() {
   const queryClient = useQueryClient();
@@ -17,6 +18,71 @@ export default function ResourceDiscovery() {
   const [type, setType] = useState('');
   const [selectedAmenities, setSelectedAmenities] = useState<string[]>([]);
   const [selectedResource, setSelectedResource] = useState<any>(null);
+
+  // QR state
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [mockQrList, setMockQrList] = useState<any[]>([]);
+
+  // Socket.IO real-time status update subscription
+  useEffect(() => {
+    const socket = io('http://localhost:5000');
+    socket.emit('join_room', 'resources:all');
+    
+    socket.on('resource:status_change', (data: any) => {
+      toast.success(`📢 Real-time update: Resource statuses refreshed!`);
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+      queryClient.invalidateQueries({ queryKey: ['vacant-classrooms'] });
+    });
+    
+    return () => {
+      socket.disconnect();
+    };
+  }, [queryClient]);
+
+  const fetchMockQrResources = async () => {
+    try {
+      const res = await api.get('/api/resources?type=Equipment');
+      setMockQrList(res.data.resources || []);
+    } catch (err) {
+      toast.error('Failed to load equipment catalog for QR simulation');
+    }
+  };
+
+  const handleSimulateQrScan = async (resourceId: string) => {
+    try {
+      // Step 1: Generate signed QR parameters from backend
+      const qrRes = await api.get(`/api/qr/equipment/${resourceId}`);
+      const { signature, expiresAt } = qrRes.data;
+
+      // Extract expiresAt Unix timestamp
+      const expTimestamp = Math.floor(new Date(expiresAt).getTime() / 1000);
+
+      // Step 2: Call verification endpoint to simulate scanning and unlocking
+      const verifyRes = await api.post('/api/qr/verify', {
+        resourceId,
+        expiresAt: expTimestamp,
+        signature,
+      });
+
+      if (verifyRes.data.valid) {
+        toast.success('QR Code verified successfully!');
+        
+        // Find resource object in catalog
+        const resObj = mockQrList.find((r) => r.id === resourceId);
+        if (resObj) {
+          setSelectedResource(resObj);
+          const now = new Date();
+          now.setMinutes(0);
+          now.setSeconds(0);
+          now.setMilliseconds(0);
+          setExpectedReturn(format(addHours(now, 24), "yyyy-MM-dd'T'HH:mm"));
+          setShowQrModal(false);
+        }
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'QR Verification failed');
+    }
+  };
 
   // Booking Form states
   const [startTime, setStartTime] = useState('');
@@ -240,9 +306,21 @@ export default function ResourceDiscovery() {
   return (
     <div className="space-y-8">
       {/* Banner */}
-      <div>
-        <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Campus Services & Resources</h1>
-        <p className="text-slate-500 mt-2">Book classrooms, borrow equipment, view vacant schedules, or request staff transport.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div>
+          <h1 className="text-4xl font-extrabold text-slate-800 tracking-tight">Campus Services & Resources</h1>
+          <p className="text-slate-500 mt-2">Book classrooms, borrow equipment, view vacant schedules, or request staff transport.</p>
+        </div>
+        <button
+          onClick={() => {
+            fetchMockQrResources();
+            setShowQrModal(true);
+          }}
+          className="px-4 py-2.5 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition-all shadow-md shadow-red-500/10 flex items-center space-x-2"
+        >
+          <span>📷</span>
+          <span>Scan Equipment QR</span>
+        </button>
       </div>
 
       {/* Tabs */}
@@ -791,6 +869,51 @@ export default function ResourceDiscovery() {
                 {requestTransportMutation.isPending ? 'Requesting...' : 'Request Dispatch'}
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Equipment QR Scanner Modal */}
+      {showQrModal && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex justify-center items-center p-4 z-50 overflow-y-auto">
+          <div className="w-full max-w-md bg-white border border-slate-200 rounded-2xl shadow-2xl p-8 space-y-6 animate-in fade-in-50 duration-200">
+            <div className="flex justify-between items-start">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Scan Equipment QR Code</h2>
+                <p className="text-xs text-slate-400 mt-1">Select a mocked active RFID/QR physical label to simulate checking out.</p>
+              </div>
+              <button
+                onClick={() => setShowQrModal(false)}
+                className="text-slate-500 hover:text-slate-700 font-bold p-2 bg-slate-100 rounded-full text-xs"
+              >
+                ✕ Close
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">Select Equipment QR Label</label>
+              {mockQrList.length === 0 ? (
+                <p className="text-xs text-slate-400">Loading equipment list...</p>
+              ) : (
+                <div className="space-y-2 max-h-60 overflow-y-auto">
+                  {mockQrList.map((item: any) => (
+                    <button
+                      key={item.id}
+                      onClick={() => handleSimulateQrScan(item.id)}
+                      className="w-full text-left p-3.5 bg-slate-50 hover:bg-red-50 border border-slate-200 hover:border-red-200 rounded-xl transition-all duration-200 group flex justify-between items-center"
+                    >
+                      <div>
+                        <h4 className="font-bold text-slate-800 text-xs group-hover:text-red-700">{item.name}</h4>
+                        <span className="text-[10px] text-slate-400">📍 {item.location}</span>
+                      </div>
+                      <span className="text-xs font-semibold text-red-600 bg-red-50 group-hover:bg-red-600 group-hover:text-white px-2 py-0.5 rounded transition-all">
+                        Scan QR ➔
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

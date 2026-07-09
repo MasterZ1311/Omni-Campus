@@ -20,10 +20,16 @@ import equipmentRoutes from './routes/equipment.routes';
 import maintenanceRoutes from './routes/maintenance.routes';
 import transportRoutes from './routes/transport.routes';
 import staffRoutes from './routes/staff.routes';
+import predictiveRoutes from './routes/predictive.routes';
+import qrRoutes from './routes/qr.routes';
+import conciergeRoutes from './routes/concierge.routes';
+import iotRoutes from './routes/iot.routes';
 
 import notificationService from './services/notification.service';
 import waitlistService from './services/waitlist.service';
 import equipmentService from './services/equipment.service';
+import iotService from './services/iot.service';
+import { mqttConfig, isMqttEnabled } from './config/mqtt.config';
 
 const app = express();
 const server = http.createServer(app);
@@ -56,6 +62,7 @@ app.use(passport.session());
 
 // Socket server setup
 notificationService.setWsServer(io);
+iotService.setWsServer(io);
 
 io.on('connection', (socket) => {
   console.log(`🔌 Client connected: ${socket.id}`);
@@ -85,6 +92,10 @@ app.use('/api/equipment', equipmentRoutes);
 app.use('/api/maintenance', maintenanceRoutes);
 app.use('/api/transport', transportRoutes);
 app.use('/api/staff', staffRoutes);
+app.use('/api/predictive', predictiveRoutes);
+app.use('/api/qr', qrRoutes);
+app.use('/api/concierge', conciergeRoutes);
+app.use('/api/iot', iotRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
@@ -102,6 +113,53 @@ async function startServer() {
   if (!dbConnected) {
     console.error('Failed to connect to database. Exiting...');
     process.exit(1);
+  }
+
+  // Conditionally connect MQTT broker for IoT sensor ingestion
+  if (isMqttEnabled()) {
+    try {
+      // Dynamic import so the server starts without mqtt package if not installed
+      const mqtt = await import('mqtt');
+      const mqttClient = mqtt.connect(mqttConfig.brokerUrl, mqttConfig.options);
+
+      mqttClient.on('connect', () => {
+        console.log(`📡 MQTT connected: ${mqttConfig.brokerUrl}`);
+        // Subscribe to all sensor topics
+        Object.values(mqttConfig.topics).forEach((topic) => {
+          mqttClient.subscribe(topic, (err) => {
+            if (err) console.error(`[MQTT] Subscribe error on ${topic}:`, err);
+            else console.log(`[MQTT] Subscribed: ${topic}`);
+          });
+        });
+      });
+
+      mqttClient.on('message', (topic: string, payload: Buffer) => {
+        // Route GPS messages separately
+        if (topic.includes('/vehicles/') && topic.includes('/gps')) {
+          const vehicleId = topic.split('/')[2];
+          try {
+            const data = JSON.parse(payload.toString());
+            iotService.handleVehicleGps(vehicleId, data);
+          } catch { /* ignore bad payloads */ }
+        } else if (topic.includes('/rfid/') && topic.includes('/scan')) {
+          const readerId = topic.split('/')[2];
+          try {
+            const data = JSON.parse(payload.toString());
+            iotService.handleRfidScan(readerId, data);
+          } catch { /* ignore bad payloads */ }
+        } else {
+          iotService.handleSensorMessage(topic, payload);
+        }
+      });
+
+      mqttClient.on('error', (err: Error) => {
+        console.error('[MQTT] Connection error:', err.message);
+      });
+    } catch (err) {
+      console.warn('[MQTT] Package not available — skipping MQTT connection. Install: npm install mqtt');
+    }
+  } else {
+    console.log('📡 MQTT disabled (no MQTT_BROKER_URL set). Set env var to enable IoT sensors.');
   }
   
   server.listen(PORT, () => {

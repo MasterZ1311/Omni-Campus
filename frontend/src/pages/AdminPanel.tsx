@@ -6,7 +6,7 @@ import { format } from 'date-fns';
 
 export default function AdminPanel() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<'configs' | 'users' | 'utilization' | 'audits' | 'staff'>('configs');
+  const [activeTab, setActiveTab] = useState<'configs' | 'users' | 'utilization' | 'audits' | 'staff' | 'predictive'>('configs');
 
   // Search/Filter states
   const [userSearch, setUserSearch] = useState('');
@@ -64,6 +64,15 @@ export default function AdminPanel() {
       return res.data;
     },
     enabled: activeTab === 'staff',
+  });
+
+  const { data: riskData = { data: [], summary: {} }, isLoading: loadingRisks } = useQuery({
+    queryKey: ['admin', 'predictive-risks'],
+    queryFn: async () => {
+      const res = await api.get('/api/predictive/maintenance-risk');
+      return res.data;
+    },
+    enabled: activeTab === 'predictive',
   });
 
   // Mutations
@@ -244,6 +253,14 @@ export default function AdminPanel() {
           }`}
         >
           📜 Audit Trails
+        </button>
+        <button
+          onClick={() => setActiveTab('predictive')}
+          className={`pb-4 text-sm font-semibold transition-all border-b-2 ${
+            activeTab === 'predictive' ? 'border-red-600 text-red-600' : 'border-transparent text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          🔮 Predictive Maintenance
         </button>
       </div>
 
@@ -579,6 +596,75 @@ export default function AdminPanel() {
                     <p className="text-[10px] text-slate-400 truncate">
                       Metadata: {JSON.stringify(log.changes)}
                     </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Predictive Maintenance */}
+        {activeTab === 'predictive' && (
+          <div className="space-y-6">
+            <div className="flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-bold text-slate-800">Predictive Resource Failure & Maintenance Dashboard</h2>
+                <p className="text-xs text-slate-500 mt-1">AI-driven preventive maintenance suggestions based on utilization density and historical logs.</p>
+              </div>
+              <div className="text-right">
+                <span className="text-xs font-bold text-red-600 bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl uppercase tracking-wider">
+                  {riskData.summary?.critical || 0} Critical Risks
+                </span>
+              </div>
+            </div>
+
+            {loadingRisks ? (
+              <div className="text-slate-400">Analyzing utilization levels and maintenance logs...</div>
+            ) : riskData.data?.length === 0 ? (
+              <p className="text-slate-400 text-sm">No assets registered under predictive tracking.</p>
+            ) : (
+              <div className="grid grid-cols-1 gap-4">
+                {riskData.data?.map((r: any) => (
+                  <div key={r.resourceId} className="bg-slate-50 border border-slate-200 rounded-xl p-5 hover:bg-slate-100/50 transition-all">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <h3 className="font-bold text-slate-800 text-sm">{r.resourceName}</h3>
+                          <span className={`text-[10px] px-2 py-0.5 rounded font-bold uppercase ${
+                            r.riskLevel === 'Critical' ? 'bg-red-100 text-red-700' :
+                            r.riskLevel === 'High' ? 'bg-orange-100 text-orange-700' :
+                            r.riskLevel === 'Medium' ? 'bg-amber-100 text-amber-700' :
+                            'bg-emerald-100 text-emerald-700'
+                          }`}>
+                            {r.riskLevel} Risk
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-500 mt-1">📍 Location: {r.location} | Type: {r.resourceType}</p>
+                        <p className="text-[11px] text-slate-400 mt-1">
+                          Past Maintenance frequency: <strong className="text-slate-600">{r.maintenanceFrequency}x</strong> (past 90d) | 
+                          Recent utilization: <strong className="text-slate-600">{r.utilizationRate}%</strong>
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-xs font-mono font-bold text-slate-600 bg-white border border-slate-200 px-2.5 py-1 rounded">
+                          Score: {r.riskScore}
+                        </span>
+                        {r.predictedNextMaintenance && (
+                          <p className="text-[10px] text-slate-400 mt-2 font-medium">
+                            Est. Failure: {format(new Date(r.predictedNextMaintenance), 'MMM d, yyyy')}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 pt-3 border-t border-slate-200/60">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5">System Recommendations</h4>
+                      <ul className="list-disc pl-4 text-xs text-slate-600 space-y-1">
+                        {r.recommendations?.map((rec: string, idx: number) => (
+                          <li key={idx}>{rec}</li>
+                        ))}
+                      </ul>
+                    </div>
                   </div>
                 ))}
               </div>

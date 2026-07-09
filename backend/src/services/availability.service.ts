@@ -71,6 +71,30 @@ export class AvailabilityService {
     
     return result;
   }
+
+  /**
+   * Quick availability check for a single time window.
+   * Used by ConciergeService and other lightweight checks.
+   */
+  async checkAvailability(
+    resourceId: string,
+    startTime: Date,
+    endTime: Date
+  ): Promise<{ isAvailable: boolean; conflictCount: number }> {
+    const conflictCount = await prisma.booking.count({
+      where: {
+        resourceId,
+        status: 'Confirmed',
+        OR: [
+          { startTime: { gte: startTime, lt: endTime } },
+          { endTime: { gt: startTime, lte: endTime } },
+          { AND: [{ startTime: { lte: startTime } }, { endTime: { gte: endTime } }] },
+        ],
+      },
+    });
+    return { isAvailable: conflictCount === 0, conflictCount };
+  }
 }
 
 export default new AvailabilityService();
+
