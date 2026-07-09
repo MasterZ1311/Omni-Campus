@@ -652,21 +652,28 @@ export default function ResourceDiscovery() {
                   </div>
 
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <button
-                      onClick={() => {
-                        setSelectedResource(room);
-                        const now = new Date();
-                        now.setMinutes(0);
-                        now.setSeconds(0);
-                        now.setMilliseconds(0);
-                        setStartTime(format(addHours(now, 1), "yyyy-MM-dd'T'HH:mm"));
-                        setEndTime(format(addHours(now, 2), "yyyy-MM-dd'T'HH:mm"));
-                        setPurpose('Immediate Study / Lecture Session');
-                      }}
-                      className="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition-all duration-300 flex items-center justify-center space-x-1"
-                    >
-                      <span>⚡ One-Click Quick Book</span>
-                    </button>
+                    {user?.role === 'Student' ? (
+                      <div className="w-full py-2 bg-slate-50 border border-slate-200 text-slate-500 font-semibold rounded-xl text-sm flex items-center justify-center space-x-2 cursor-default">
+                        <span>👁️</span>
+                        <span>View Only</span>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => {
+                          setSelectedResource(room);
+                          const now = new Date();
+                          now.setMinutes(0);
+                          now.setSeconds(0);
+                          now.setMilliseconds(0);
+                          setStartTime(format(addHours(now, 1), "yyyy-MM-dd'T'HH:mm"));
+                          setEndTime(format(addHours(now, 2), "yyyy-MM-dd'T'HH:mm"));
+                          setPurpose('Immediate Study / Lecture Session');
+                        }}
+                        className="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded-xl text-sm transition-all duration-300 flex items-center justify-center space-x-1"
+                      >
+                        <span>⚡ One-Click Quick Book</span>
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -825,7 +832,15 @@ export default function ResourceDiscovery() {
             )}
 
             {/* Conditional Booking vs Checkout Form */}
-            {selectedResource.type === 'Equipment' ? (
+            {user?.role === 'Student' ? (
+              <div className="p-6 bg-slate-50 border border-slate-200 rounded-xl text-center space-y-2 mt-4">
+                <span className="text-2xl">👁️</span>
+                <h4 className="font-bold text-slate-800 text-sm">Student View-Only Mode</h4>
+                <p className="text-xs text-slate-505 leading-relaxed font-medium">
+                  Students are not authorized to check out equipment or book rooms directly. Please coordinate with an authorized Faculty member or Facility Administrator.
+                </p>
+              </div>
+            ) : selectedResource.type === 'Equipment' ? (
               <form onSubmit={handleCheckoutSubmit} className="space-y-4">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">Expected Return Time</label>
