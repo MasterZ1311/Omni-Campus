@@ -6,6 +6,8 @@ import session from 'express-session';
 import path from 'path';
 import http from 'http';
 import { Server } from 'socket.io';
+import rateLimit from 'express-rate-limit';
+import logger from './utils/logger';
 
 import passport from './config/passport.config';
 import { sessionConfig } from './config/redis.config';
@@ -82,7 +84,18 @@ io.on('connection', (socket) => {
   });
 });
 
+// Rate limiting middleware
+const apiLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100,
+  message: { error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
 // Routes
+app.use('/auth', apiLimiter, authRoutes);
+app.use('/api', apiLimiter);
 app.use('/auth', authRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/bookings', bookingRoutes);
@@ -111,7 +124,7 @@ async function startServer() {
   const dbConnected = await testDatabaseConnection();
   
   if (!dbConnected) {
-    console.error('Failed to connect to database. Exiting...');
+    logger.error('Failed to connect to database. Exiting...');
     process.exit(1);
   }
 
@@ -123,12 +136,12 @@ async function startServer() {
       const mqttClient = mqtt.connect(mqttConfig.brokerUrl, mqttConfig.options);
 
       mqttClient.on('connect', () => {
-        console.log(`📡 MQTT connected: ${mqttConfig.brokerUrl}`);
+        logger.info(`📡 MQTT connected: ${mqttConfig.brokerUrl}`);
         // Subscribe to all sensor topics
         Object.values(mqttConfig.topics).forEach((topic) => {
           mqttClient.subscribe(topic, (err) => {
-            if (err) console.error(`[MQTT] Subscribe error on ${topic}:`, err);
-            else console.log(`[MQTT] Subscribed: ${topic}`);
+            if (err) logger.error(`[MQTT] Subscribe error on ${topic}: ${err.message}`);
+            else logger.info(`[MQTT] Subscribed: ${topic}`);
           });
         });
       });
@@ -153,17 +166,17 @@ async function startServer() {
       });
 
       mqttClient.on('error', (err: Error) => {
-        console.error('[MQTT] Connection error:', err.message);
+        logger.error(`[MQTT] Connection error: ${err.message}`);
       });
     } catch (err) {
-      console.warn('[MQTT] Package not available — skipping MQTT connection. Install: npm install mqtt');
+      logger.warn('[MQTT] Package not available — skipping MQTT connection.');
     }
   } else {
-    console.log('📡 MQTT disabled (no MQTT_BROKER_URL set). Set env var to enable IoT sensors.');
+    logger.info('📡 MQTT disabled (no MQTT_BROKER_URL set). Set env var to enable IoT sensors.');
   }
   
   server.listen(PORT, () => {
-    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    logger.info(`🚀 Server running on http://localhost:${PORT}`);
   });
 }
 

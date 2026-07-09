@@ -1,4 +1,6 @@
 import session from 'express-session';
+import { createClient } from 'redis';
+import { RedisStore } from 'connect-redis';
 
 class MockRedis {
   private store: Record<string, string> = {};
@@ -35,9 +37,25 @@ class MockRedis {
   }
 }
 
-export const redisClient = new MockRedis();
+const redisUrl = process.env.REDIS_URL;
+let redisClient: any;
+let sessionStore: any;
 
-export const sessionStore = new session.MemoryStore();
+if (redisUrl) {
+  console.log(`📡 Connecting to Redis server at ${redisUrl}...`);
+  const client = createClient({ url: redisUrl });
+  client.connect().catch((err) => {
+    console.error('❌ Redis connection error:', err);
+  });
+  redisClient = client;
+  sessionStore = new RedisStore({ client: client as any });
+} else {
+  console.log('📡 No REDIS_URL found in environment. Using MockRedis & MemoryStore.');
+  redisClient = new MockRedis();
+  sessionStore = new session.MemoryStore();
+}
+
+export { redisClient, sessionStore };
 
 export const sessionConfig: session.SessionOptions = {
   store: sessionStore,
