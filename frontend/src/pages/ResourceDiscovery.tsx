@@ -84,6 +84,46 @@ export default function ResourceDiscovery() {
     }
   };
 
+  const getRoomStatusColor = (roomName: string) => {
+    const room = resourceData.resources.find((r: any) => r.name === roomName);
+    if (!room) return 'fill-slate-50 stroke-slate-200 hover:fill-slate-100';
+    if (room.status === 'Maintenance') return 'fill-amber-50 stroke-amber-300 hover:fill-amber-100';
+    if (room.isOccupiedNow) return 'fill-rose-50 stroke-rose-300 hover:fill-rose-100';
+    return 'fill-emerald-50 stroke-emerald-300 hover:fill-emerald-100';
+  };
+
+  const getRoomStatusLabel = (roomName: string) => {
+    const room = resourceData.resources.find((r: any) => r.name === roomName);
+    if (!room) return 'OFFLINE';
+    if (room.status === 'Maintenance') return 'MAINTENANCE';
+    if (room.isOccupiedNow) return 'OCCUPIED';
+    return 'AVAILABLE';
+  };
+
+  const getRoomStatusTextColor = (roomName: string) => {
+    const room = resourceData.resources.find((r: any) => r.name === roomName);
+    if (!room) return '#64748b'; // slate-500
+    if (room.status === 'Maintenance') return '#d97706'; // amber-600
+    if (room.isOccupiedNow) return '#e11d48'; // rose-600
+    return '#059669'; // emerald-600
+  };
+
+  const handleRoomClick = (roomName: string) => {
+    const room = resourceData.resources.find((r: any) => r.name === roomName);
+    if (room) {
+      setSelectedResource(room);
+      const now = new Date();
+      now.setMinutes(0);
+      now.setSeconds(0);
+      now.setMilliseconds(0);
+      setStartTime(format(addHours(now, 1), "yyyy-MM-dd'T'HH:mm"));
+      setEndTime(format(addHours(now, 2), "yyyy-MM-dd'T'HH:mm"));
+      setPurpose('Immediate Study / Research Session');
+    } else {
+      toast.error(`Room "${roomName}" not currently found in active list`);
+    }
+  };
+
   // Booking Form states
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
@@ -401,6 +441,96 @@ export default function ResourceDiscovery() {
               </div>
             </div>
           </div>
+
+          {/* Interactive SVG Floor Map */}
+          {!loadingResources && (type === '' || type === 'Classroom' || type === 'Lab') && (
+            <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm mb-6">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+                <div>
+                  <h3 className="text-lg font-bold text-slate-800">Interactive Floor Map Layout</h3>
+                  <p className="text-xs text-slate-500 mt-0.5">Click any room block to configure booking reservations immediately.</p>
+                </div>
+                <div className="flex items-center space-x-4 text-[11px] font-bold uppercase tracking-wider">
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-3 h-3 bg-emerald-500 rounded-full"></span>
+                    <span className="text-emerald-700">Available</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-3 h-3 bg-rose-500 rounded-full"></span>
+                    <span className="text-rose-700">Occupied</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    <span className="w-3 h-3 bg-amber-500 rounded-full"></span>
+                    <span className="text-amber-700">Maintenance</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-center bg-slate-50 border border-slate-100 rounded-xl p-4 overflow-x-auto">
+                <svg width="100%" height="220" viewBox="0 0 800 220" className="max-w-3xl min-w-[600px] select-none font-sans">
+                  {/* Outer Wall */}
+                  <rect x="5" y="5" width="790" height="210" rx="16" fill="none" stroke="#cbd5e1" strokeWidth="2" strokeDasharray="4 4" />
+
+                  {/* Room 101 Block */}
+                  <g className="cursor-pointer" onClick={() => handleRoomClick('Engineering Hall Room 101')}>
+                    <rect
+                      x="20"
+                      y="20"
+                      width="220"
+                      height="120"
+                      rx="12"
+                      className={`transition-all duration-300 stroke-2 ${getRoomStatusColor('Engineering Hall Room 101')}`}
+                    />
+                    <text x="130" y="65" textAnchor="middle" className="font-bold text-sm fill-slate-800">Room 101</text>
+                    <text x="130" y="85" textAnchor="middle" className="font-semibold text-[10px] tracking-wider fill-slate-400">ENGINEERING HALL</text>
+                    <text x="130" y="110" textAnchor="middle" className="font-bold text-[9px] tracking-widest" fill={getRoomStatusTextColor('Engineering Hall Room 101')}>
+                      {getRoomStatusLabel('Engineering Hall Room 101')}
+                    </text>
+                  </g>
+
+                  {/* Room 205 Block */}
+                  <g className="cursor-pointer" onClick={() => handleRoomClick('Science Block Room 205')}>
+                    <rect
+                      x="260"
+                      y="20"
+                      width="220"
+                      height="120"
+                      rx="12"
+                      className={`transition-all duration-300 stroke-2 ${getRoomStatusColor('Science Block Room 205')}`}
+                    />
+                    <text x="370" y="65" textAnchor="middle" className="font-bold text-sm fill-slate-800">Room 205</text>
+                    <text x="370" y="85" textAnchor="middle" className="font-semibold text-[10px] tracking-wider fill-slate-400">SCIENCE BLOCK</text>
+                    <text x="370" y="110" textAnchor="middle" className="font-bold text-[9px] tracking-widest" fill={getRoomStatusTextColor('Science Block Room 205')}>
+                      {getRoomStatusLabel('Science Block Room 205')}
+                    </text>
+                  </g>
+
+                  {/* Computer Lab A Block */}
+                  <g className="cursor-pointer" onClick={() => handleRoomClick('Computer Lab A')}>
+                    <rect
+                      x="500"
+                      y="20"
+                      width="280"
+                      height="120"
+                      rx="12"
+                      className={`transition-all duration-300 stroke-2 ${getRoomStatusColor('Computer Lab A')}`}
+                    />
+                    <text x="640" y="65" textAnchor="middle" className="font-bold text-sm fill-slate-800">Computer Lab A</text>
+                    <text x="640" y="85" textAnchor="middle" className="font-semibold text-[10px] tracking-wider fill-slate-400">IT BUILDING</text>
+                    <text x="640" y="110" textAnchor="middle" className="font-bold text-[9px] tracking-widest" fill={getRoomStatusTextColor('Computer Lab A')}>
+                      {getRoomStatusLabel('Computer Lab A')}
+                    </text>
+                  </g>
+
+                  {/* Corridor / Hallway */}
+                  <g>
+                    <rect x="20" y="160" width="760" height="40" rx="8" fill="#f8fafc" stroke="#e2e8f0" strokeWidth="1.5" />
+                    <text x="400" y="185" textAnchor="middle" className="font-semibold text-[10px] tracking-widest fill-slate-400">MAIN TRANSIT CORRIDOR</text>
+                  </g>
+                </svg>
+              </div>
+            </div>
+          )}
 
           {/* Grid List */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

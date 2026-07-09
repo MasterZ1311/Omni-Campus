@@ -38,6 +38,19 @@ export class PredictiveController {
       res.status(status).json({ error: err.message });
     }
   }
+
+  /**
+   * GET /api/predictive/utilization-forecast
+   * Returns a 7-day predicted utilization index forecast.
+   */
+  async getForecast(req: Request, res: Response) {
+    try {
+      const forecast = await predictiveService.getUtilizationForecast();
+      res.json(forecast);
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  }
 }
 
 export default new PredictiveController();

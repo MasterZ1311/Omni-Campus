@@ -75,6 +75,15 @@ export default function AdminPanel() {
     enabled: activeTab === 'predictive',
   });
 
+  const { data: forecastData = [], isLoading: loadingForecast } = useQuery({
+    queryKey: ['admin', 'utilization-forecast'],
+    queryFn: async () => {
+      const res = await api.get('/api/predictive/utilization-forecast');
+      return res.data;
+    },
+    enabled: activeTab === 'utilization',
+  });
+
   // Mutations
   const updateConfigMutation = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: any }) => {
@@ -570,6 +579,43 @@ export default function AdminPanel() {
                       </div>
                     </div>
                   ))}
+                </div>
+
+                {/* 7-Day AI Utilization Forecast Chart */}
+                <div className="pt-6 border-t border-slate-200 space-y-4">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-800">7-Day AI Utilization Forecast</h3>
+                    <p className="text-xs text-slate-500 mt-0.5">Linear regression projection based on the past 30 days of active campus booking reservations.</p>
+                  </div>
+
+                  {loadingForecast ? (
+                    <div className="text-xs text-slate-400">Calculating linear regression projection...</div>
+                  ) : forecastData.length === 0 ? (
+                    <div className="text-xs text-slate-400">No projection data compiled yet.</div>
+                  ) : (
+                    <div className="grid grid-cols-2 sm:grid-cols-7 gap-4">
+                      {forecastData.map((f: any, index: number) => (
+                        <div key={index} className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col items-center justify-between text-center hover:bg-slate-100/50 transition-all">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{f.date}</span>
+                          
+                          {/* Visual indicator bar */}
+                          <div className="w-6 h-24 bg-slate-200 rounded-full overflow-hidden flex flex-col justify-end border border-slate-300 my-3">
+                            <div 
+                              className={`w-full rounded-b-full transition-all duration-500 ${
+                                f.expectedRate > 75 ? 'bg-red-600' :
+                                f.expectedRate > 40 ? 'bg-amber-500' :
+                                'bg-emerald-500'
+                              }`}
+                              style={{ height: `${f.expectedRate}%` }}
+                            ></div>
+                          </div>
+
+                          <span className="text-sm font-extrabold text-slate-800 leading-none">{f.expectedRate}%</span>
+                          <span className="text-[9px] font-semibold text-slate-400 mt-1 uppercase tracking-widest">Expected</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

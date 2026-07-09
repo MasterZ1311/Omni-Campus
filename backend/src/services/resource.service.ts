@@ -100,7 +100,24 @@ export class ResourceService {
       orderBy: { name: 'asc' },
     });
     
-    let parsedResources = resources.map(r => this.parseResource(r));
+    const now = new Date();
+    const activeBookings = await prisma.booking.findMany({
+      where: {
+        status: 'Confirmed',
+        startTime: { lte: now },
+        endTime: { gte: now },
+      },
+      select: { resourceId: true },
+    });
+    const occupiedSet = new Set(activeBookings.map((b) => b.resourceId));
+
+    let parsedResources = resources.map(r => {
+      const parsed = this.parseResource(r);
+      if (parsed) {
+        parsed.isOccupiedNow = occupiedSet.has(r.id);
+      }
+      return parsed;
+    });
     
     if (filters.amenities && filters.amenities.length > 0) {
       parsedResources = parsedResources.filter((r: any) => {
