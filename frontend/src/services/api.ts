@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { useAuth } from '../store/useAuth';
 
-const API_URL = 'http://localhost:5000'; // Match backend port
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000'; // Match backend port
 
 const api = axios.create({
   baseURL: API_URL,
