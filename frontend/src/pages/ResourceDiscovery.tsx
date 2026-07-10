@@ -105,8 +105,8 @@ export default function ResourceDiscovery() {
   };
 
   const handleRoomClick = (roomName: string) => {
-    if (user?.role === 'Student') {
-      toast.error('View only: Students cannot book rooms directly. Contact Faculty.');
+    if (user?.role === 'Student' || user?.role === 'Attender') {
+      toast.error('View only: You cannot book rooms directly. Contact Faculty.');
       return;
     }
     const room = resourceData.resources.find((r: any) => r.name === roomName);
@@ -136,6 +136,52 @@ export default function ResourceDiscovery() {
   const [purpose, setPurpose] = useState('');
   const [recurrence, setRecurrence] = useState('None');
   const [recurrenceEnd, setRecurrenceEnd] = useState('');
+
+  // Student permission request states
+  const [facultyVerifier, setFacultyVerifier] = useState('');
+  const [permissionSlip, setPermissionSlip] = useState<File | null>(null);
+  const [facultyList, setFacultyList] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user?.role === 'Student' && selectedResource) {
+      api.get('/auth/faculty')
+        .then((res) => setFacultyList(res.data))
+        .catch((err) => console.error('Failed to fetch faculty list', err));
+    }
+  }, [user, selectedResource]);
+
+  const handlePermissionRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!permissionSlip) {
+      toast.error('Please upload a signed Faculty permission slip.');
+      return;
+    }
+    if (!facultyVerifier) {
+      toast.error('Please select a Faculty member to verify your permission slip.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('resourceId', selectedResource.id);
+    formData.append('startTime', startTime || new Date().toISOString());
+    formData.append('endTime', selectedResource.type === 'Equipment' ? expectedReturn : endTime || new Date().toISOString());
+    formData.append('purpose', purpose || 'Resource access request');
+    formData.append('verifiedByFacultyId', facultyVerifier);
+    formData.append('permissionSlip', permissionSlip);
+
+    try {
+      await api.post('/api/bookings/request-with-permission', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success('Access request submitted for Faculty verification.');
+      setSelectedResource(null);
+      setPermissionSlip(null);
+      setFacultyVerifier('');
+      queryClient.invalidateQueries({ queryKey: ['resources'] });
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to submit request.');
+    }
+  };
 
   // Equipment checkout state
   const [expectedReturn, setExpectedReturn] = useState('');
@@ -184,7 +230,7 @@ export default function ResourceDiscovery() {
       const res = await api.get('/api/transport/vehicles');
       return res.data;
     },
-    enabled: activeTab === 'transport' && user?.role !== 'Student',
+    enabled: activeTab === 'transport' && ['Faculty', 'Administrator', 'Facility_Manager'].includes(user?.role || ''),
   });
 
   const { data: schedules = [], isLoading: loadingSchedules } = useQuery({
@@ -370,7 +416,7 @@ export default function ResourceDiscovery() {
             <p className="text-slate-500 mt-0.5 text-xs">Book classrooms, borrow equipment, view vacant schedules, or request staff transport.</p>
           )}
         </div>
-        {user?.role !== 'Student' && (
+        {['Lab_Assistant', 'Administrator', 'Facility_Manager'].includes(user?.role || '') && (
           <button
             onClick={() => {
               fetchMockQrResources();
@@ -410,7 +456,7 @@ export default function ResourceDiscovery() {
         >
           Campus Map
         </button>
-        {user?.role !== 'Student' && (
+        {['Faculty', 'Administrator', 'Facility_Manager'].includes(user?.role || '') && (
           <button
             onClick={() => setActiveTab('transport')}
             className={`pb-2 text-xs font-bold transition-all border-b-2 uppercase tracking-wider ${
@@ -561,7 +607,7 @@ export default function ResourceDiscovery() {
                   </div>
 
                   <div className="mt-3 pt-3 border-t border-slate-100">
-                    {user?.role === 'Student' ? (
+                    {['Student', 'Attender'].includes(user?.role || '') ? (
                       <div className="w-full py-1.5 bg-slate-50 border border-slate-200 text-slate-400 font-semibold rounded text-[11px] flex items-center justify-center space-x-1 cursor-default font-mono">
                         <span>VIEW ONLY</span>
                       </div>
@@ -636,7 +682,7 @@ export default function ResourceDiscovery() {
                   </div>
 
                   <div className="mt-3 pt-3 border-t border-slate-100">
-                    {user?.role === 'Student' ? (
+                    {['Student', 'Attender'].includes(user?.role || '') ? (
                       <div className="w-full py-1.5 bg-slate-50 border border-slate-200 text-slate-400 font-semibold rounded text-[11px] flex items-center justify-center space-x-1 cursor-default font-mono">
                         <span>VIEW ONLY</span>
                       </div>
@@ -742,7 +788,7 @@ export default function ResourceDiscovery() {
       )}
 
       {/* Staff Transport Hub */}
-      {activeTab === 'transport' && user?.role !== 'Student' && (
+      {activeTab === 'transport' && ['Faculty', 'Administrator', 'Facility_Manager'].includes(user?.role || '') && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Schedules list */}
           <div className="lg:col-span-2 space-y-4">
@@ -888,14 +934,90 @@ export default function ResourceDiscovery() {
               )}
 
               {/* Conditional Booking vs Checkout Form */}
-              {user?.role === 'Student' ? (
+              {user?.role === 'Attender' ? (
                 <div className="p-4 bg-slate-50 border border-slate-200 rounded-lg text-center space-y-2.5 mt-3">
                   <span className="text-lg">👁️</span>
-                  <h4 className="font-bold text-slate-800 text-xs">Student View-Only Mode</h4>
-                  <p className="text-[10px] text-slate-450 leading-relaxed font-semibold">
-                    Students are not authorized to check out equipment or book rooms directly. Please coordinate with an authorized Faculty member or Facility Administrator.
+                  <h4 className="font-bold text-slate-800 text-xs">Attender View-Only Mode</h4>
+                  <p className="text-[10px] text-slate-400 leading-relaxed font-semibold">
+                    Attenders are not authorized to reserve resources or equipment.
                   </p>
                 </div>
+              ) : user?.role === 'Student' ? (
+                <form onSubmit={handlePermissionRequestSubmit} className="space-y-3 mt-3 border-t border-slate-100 pt-3">
+                  <span className="text-[9px] font-bold text-red-655 uppercase tracking-widest block mb-2">Request Access via Permission Slip</span>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                        {selectedResource.type === 'Equipment' ? 'Checkout Time' : 'Start Date & Time'}
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={startTime}
+                        onChange={(e) => setStartTime(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded bg-white border border-slate-300 text-slate-900 text-xs focus:outline-none font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">
+                        {selectedResource.type === 'Equipment' ? 'Expected Return' : 'End Date & Time'}
+                      </label>
+                      <input
+                        type="datetime-local"
+                        value={selectedResource.type === 'Equipment' ? expectedReturn : endTime}
+                        onChange={(e) => selectedResource.type === 'Equipment' ? setExpectedReturn(e.target.value) : setEndTime(e.target.value)}
+                        className="w-full px-3 py-1.5 rounded bg-white border border-slate-300 text-slate-900 text-xs focus:outline-none font-semibold"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Purpose / Justification</label>
+                    <input
+                      type="text"
+                      value={purpose}
+                      onChange={(e) => setPurpose(e.target.value)}
+                      placeholder="e.g. Lab experiment execution, seminar prep..."
+                      className="w-full px-3 py-1.5 rounded bg-white border border-slate-300 text-slate-900 text-xs focus:outline-none font-semibold"
+                      required
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Select Faculty Verifier</label>
+                    <select
+                      value={facultyVerifier}
+                      onChange={(e) => setFacultyVerifier(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded bg-white border border-slate-300 text-slate-900 text-xs focus:outline-none font-semibold"
+                      required
+                    >
+                      <option value="">-- Select Faculty --</option>
+                      {facultyList.map((fac) => (
+                        <option key={fac.id} value={fac.id}>{fac.name} ({fac.email})</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-[9px] font-semibold text-slate-400 uppercase tracking-wider mb-1">Upload Signed Permission Slip (PDF/Image)</label>
+                    <input
+                      type="file"
+                      onChange={(e) => setPermissionSlip(e.target.files?.[0] || null)}
+                      accept=".pdf,image/png,image/jpeg,image/jpg"
+                      className="w-full text-[10px] text-slate-500 file:mr-3 file:py-1 file:px-2 file:rounded file:border-0 file:text-[10px] file:font-semibold file:bg-red-50 file:text-red-700 hover:file:bg-red-100"
+                      required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-semibold rounded text-xs transition-all shadow-sm"
+                  >
+                    Submit for Faculty Verification
+                  </button>
+                </form>
               ) : selectedResource.type === 'Equipment' ? (
                 <form onSubmit={handleCheckoutSubmit} className="space-y-3">
                   <div>
@@ -999,7 +1121,7 @@ export default function ResourceDiscovery() {
                     >
                       Confirm Booking
                     </button>
-                    {user?.role !== 'Student' && (
+                    {!['Student', 'Attender'].includes(user?.role || '') && (
                       <button
                         type="button"
                         onClick={handleJoinWaitlist}

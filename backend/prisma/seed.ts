@@ -22,28 +22,32 @@ async function main() {
   await prisma.user.deleteMany({});
   await prisma.systemConfig.deleteMany({});
   
-  // Create Admin User (local auth)
-  const adminPassword = await bcrypt.hash('admin123', 10);
+  // Shared test password for all roles: Password123!
+  const commonPassword = await bcrypt.hash('Password123!', 10);
+
+  // Create Admin User
   const admin = await prisma.user.create({
     data: {
       email: 'admin@campus.edu',
       name: 'System Administrator',
       role: 'Administrator',
+      phoneNumber: '+15550000001',
       ssoProvider: 'local',
-      passwordHash: adminPassword,
+      passwordHash: commonPassword,
       preferences: JSON.stringify({ notifications: { email: true, sms: false, inApp: true } }),
     },
   });
   console.log('Created admin:', admin.email);
   
-  // Create Facility Manager (OIDC)
+  // Create Facility Manager
   const facilityManager = await prisma.user.create({
     data: {
       email: 'facility@campus.edu',
       name: 'John Facility',
       role: 'Facility_Manager',
-      ssoProvider: 'oidc',
-      ssoId: 'oidc-facility-001',
+      phoneNumber: '+15550000002',
+      ssoProvider: 'local',
+      passwordHash: commonPassword,
       preferences: JSON.stringify({}),
     },
   });
@@ -54,8 +58,9 @@ async function main() {
       email: 'professor@campus.edu',
       name: 'Dr. Sarah Professor',
       role: 'Faculty',
-      ssoProvider: 'oidc',
-      ssoId: 'oidc-faculty-001',
+      phoneNumber: '+15550000003',
+      ssoProvider: 'local',
+      passwordHash: commonPassword,
       preferences: JSON.stringify({}),
     },
   });
@@ -66,12 +71,39 @@ async function main() {
       email: 'student@campus.edu',
       name: 'Alice Student',
       role: 'Student',
-      ssoProvider: 'oidc',
-      ssoId: 'oidc-student-001',
+      phoneNumber: '+15550000004',
+      ssoProvider: 'local',
+      passwordHash: commonPassword,
       preferences: JSON.stringify({}),
     },
   });
-  console.log('Created users: facility manager, faculty, student');
+
+  // Create Lab Assistant
+  const labAssistant = await prisma.user.create({
+    data: {
+      email: 'labassistant@campus.edu',
+      name: 'Bob LabTech',
+      role: 'Lab_Assistant',
+      phoneNumber: '+15550000005',
+      ssoProvider: 'local',
+      passwordHash: commonPassword,
+      preferences: JSON.stringify({}),
+    },
+  });
+
+  // Create Attender
+  const attender = await prisma.user.create({
+    data: {
+      email: 'attender@campus.edu',
+      name: 'Charlie Attender',
+      role: 'Attender',
+      phoneNumber: '+15550000006',
+      ssoProvider: 'local',
+      passwordHash: commonPassword,
+      preferences: JSON.stringify({}),
+    },
+  });
+  console.log('Created users for all roles (Student, Faculty, Admin, Lab Assistant, Attender)');
   
   // Create Classrooms
   const classroom1 = await prisma.resource.create({

@@ -72,6 +72,19 @@ export class StaffController {
       res.status(500).json({ error: error.message });
     }
   }
+
+  async completeAssignment(req: Request, res: Response) {
+    try {
+      const { id } = req.params;
+      const assignment = await prisma.staffAssignment.update({
+        where: { id },
+        data: { status: 'Completed' }
+      });
+      res.json(assignment);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  }
 }
 
 export default new StaffController();

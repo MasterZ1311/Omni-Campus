@@ -157,6 +157,76 @@ export class BookingController {
       res.status(400).json({ error: error.message || 'Failed to fetch bookings' });
     }
   }
+
+  async createBookingRequestWithPermission(req: Request, res: Response) {
+    try {
+      const user = (req as any).user;
+      const file = req.file;
+      
+      const booking = await bookingService.createBookingRequestWithPermission(
+        req.body,
+        file?.filename,
+        user.id
+      );
+
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: 'CREATE_BOOKING_REQUEST',
+          entityType: 'Booking',
+          entityId: booking.id,
+          changes: JSON.stringify({ createdRequest: booking }),
+          ipAddress: req.ip || '',
+        },
+      });
+
+      res.status(201).json(booking);
+    } catch (error: any) {
+      console.error('Create booking request error:', error);
+      res.status(400).json({ error: error.message || 'Failed to submit request' });
+    }
+  }
+
+  async getPendingVerifications(req: Request, res: Response) {
+    try {
+      const user = (req as any).user;
+      const requests = await bookingService.getPendingVerifications(user.id);
+      res.json(requests);
+    } catch (error: any) {
+      console.error('Get pending verifications error:', error);
+      res.status(400).json({ error: error.message || 'Failed to fetch verification requests' });
+    }
+  }
+
+  async verifyBookingRequest(req: Request, res: Response) {
+    try {
+      const user = (req as any).user;
+      const { id } = req.params;
+      const { action } = req.body; // 'approve' | 'decline'
+
+      if (action !== 'approve' && action !== 'decline') {
+        return res.status(400).json({ error: "Invalid action. Use 'approve' or 'decline'" });
+      }
+
+      const booking = await bookingService.verifyBookingRequest(id, action, user.id);
+
+      await prisma.auditLog.create({
+        data: {
+          userId: user.id,
+          action: `VERIFY_BOOKING_${action.toUpperCase()}`,
+          entityType: 'Booking',
+          entityId: booking.id,
+          changes: JSON.stringify({ verifiedBooking: booking }),
+          ipAddress: req.ip || '',
+        },
+      });
+
+      res.json(booking);
+    } catch (error: any) {
+      console.error('Verify booking request error:', error);
+      res.status(400).json({ error: error.message || 'Failed to verify request' });
+    }
+  }
 }
 
 export default new BookingController();

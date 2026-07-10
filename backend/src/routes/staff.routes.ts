@@ -14,8 +14,7 @@ router.post('/assignments', enforceRole(['Administrator', 'Facility_Manager']), 
 // NOT accessible to Students or Faculty
 router.put('/:staffId/status', enforceRole(['Administrator', 'Facility_Manager']), staffController.updateStatus.bind(staffController));
 
-// My assignments — Facility_Manager and Administrator can view assignments
-// Faculty may also view their own tech-support assignments
-router.get('/my-assignments', enforceRole(['Administrator', 'Facility_Manager', 'Faculty']), staffController.getMyAssignments.bind(staffController));
+router.get('/my-assignments', enforceRole(['Administrator', 'Facility_Manager', 'Faculty', 'Attender', 'Lab_Assistant']), staffController.getMyAssignments.bind(staffController));
 
+router.patch('/assignments/:id/complete', enforceRole(['Administrator', 'Facility_Manager', 'Faculty', 'Attender', 'Lab_Assistant']), staffController.completeAssignment.bind(staffController));
 export default router;

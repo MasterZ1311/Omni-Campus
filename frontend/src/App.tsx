@@ -59,11 +59,11 @@ function ProtectedLayout({ children }: { children: React.ReactNode }) {
       <aside className="w-full md:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 flex flex-col p-6">
         <div className="flex items-center space-x-3 mb-8">
           <div className="bg-red-600 p-2 rounded-xl text-white font-bold shadow-md shadow-red-500/10">
-            OC
+            SIST
           </div>
           <div>
-            <h1 className="font-bold text-lg text-slate-800 tracking-wider">OMNI-CAMPUS</h1>
-            <p className="text-xs text-slate-505 font-medium">Resource Management</p>
+            <h1 className="font-bold text-lg text-slate-800 tracking-wider">SATHYABAMA</h1>
+            <p className="text-[10px] text-slate-500 font-semibold">Institute of Science and Technology, Chennai</p>
           </div>
         </div>
 

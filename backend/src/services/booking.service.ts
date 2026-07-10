@@ -473,7 +473,7 @@ export class BookingService {
     const where: any = { userId };
     
     if (!includeCompleted) {
-      where.status = { in: ['Confirmed'] };
+      where.status = { in: ['Confirmed', 'Pending_Verification'] };
       where.endTime = { gte: new Date() };
     }
     
@@ -484,6 +484,83 @@ export class BookingService {
       },
       orderBy: { startTime: 'asc' },
     });
+  }
+
+  async createBookingRequestWithPermission(data: any, fileName: string | undefined, userId: string) {
+    const startTime = new Date(data.startTime);
+    const endTime = new Date(data.endTime);
+
+    const durationCheck = this.validateDuration(startTime, endTime);
+    if (!durationCheck.valid) {
+      throw new Error(durationCheck.error);
+    }
+
+    const conflicts = await this.checkConflicts(data.resourceId, startTime, endTime);
+    if (conflicts.hasConflict) {
+      throw new Error('Booking conflict: The resource is already booked during this time');
+    }
+
+    const booking = await prisma.booking.create({
+      data: {
+        userId,
+        resourceId: data.resourceId,
+        startTime,
+        endTime,
+        purpose: data.purpose,
+        status: 'Pending_Verification',
+        permissionSlipUrl: fileName ? `/uploads/${fileName}` : null,
+        verifiedByFacultyId: data.verifiedByFacultyId,
+      },
+      include: {
+        resource: { select: { id: true, name: true, type: true, location: true } },
+      }
+    });
+
+    return booking;
+  }
+
+  async getPendingVerifications(facultyId: string) {
+    return prisma.booking.findMany({
+      where: {
+        status: 'Pending_Verification',
+        verifiedByFacultyId: facultyId,
+      },
+      include: {
+        resource: { select: { id: true, name: true, type: true, location: true } },
+        user: { select: { id: true, name: true, email: true } },
+      },
+      orderBy: { startTime: 'asc' },
+    });
+  }
+
+  async verifyBookingRequest(bookingId: string, action: 'approve' | 'decline', facultyId: string) {
+    const booking = await prisma.booking.findUnique({
+      where: { id: bookingId }
+    });
+
+    if (!booking) {
+      throw new Error('Booking request not found');
+    }
+
+    if (booking.verifiedByFacultyId !== facultyId) {
+      throw new Error('Unauthorized to verify this booking');
+    }
+
+    const updatedStatus = action === 'approve' ? 'Confirmed' : 'Cancelled';
+    const cancellationReason = action === 'decline' ? 'Declined by Faculty' : null;
+
+    const updated = await prisma.booking.update({
+      where: { id: bookingId },
+      data: {
+        status: updatedStatus,
+        cancellationReason,
+      },
+      include: {
+        resource: { select: { id: true, name: true, type: true, location: true } }
+      }
+    });
+
+    return updated;
   }
 }
 

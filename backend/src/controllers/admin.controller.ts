@@ -66,6 +66,7 @@ export class AdminController {
           email: true,
           name: true,
           role: true,
+          phoneNumber: true,
           ssoProvider: true,
           lastLogin: true,
           createdAt: true,
@@ -168,6 +169,53 @@ export class AdminController {
       });
       
       res.json(parsed);
+    } catch (error: any) {
+      res.status(400).json({ error: error.message });
+    }
+  }
+
+  async sendNotification(req: Request, res: Response) {
+    try {
+      const admin = (req as any).user;
+      const { userId, type, channel, message } = req.body;
+
+      const targetUser = await prisma.user.findUnique({ where: { id: userId } });
+      if (!targetUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      let recipient = '';
+      if (channel === 'sms') {
+        recipient = targetUser.phoneNumber || 'Unknown Number';
+        console.log(`[SMS Gateway Mock] Sending SMS to ${recipient}: ${message}`);
+      } else {
+        recipient = targetUser.email;
+      }
+
+      const notification = await prisma.notification.create({
+        data: {
+          userId,
+          type,
+          channel,
+          recipient,
+          payload: JSON.stringify({ message }),
+          status: 'Sent',
+          sentAt: new Date()
+        }
+      });
+
+      await prisma.auditLog.create({
+        data: {
+          userId: admin.id,
+          action: 'SEND_NOTIFICATION',
+          entityType: 'Notification',
+          entityId: notification.id,
+          changes: JSON.stringify({ channel, recipient }),
+          ipAddress: req.ip || '',
+        },
+      });
+
+      res.status(201).json(notification);
     } catch (error: any) {
       res.status(400).json({ error: error.message });
     }

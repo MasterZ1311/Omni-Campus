@@ -17,4 +17,6 @@ router.post('/users/:id/suspend', adminController.suspendUser.bind(adminControll
 router.get('/analytics/utilization', adminController.getUtilizationStats.bind(adminController));
 router.get('/audit-logs', adminController.listAuditLogs.bind(adminController));
 
+router.post('/notifications', adminController.sendNotification.bind(adminController));
+
 export default router;

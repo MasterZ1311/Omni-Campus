@@ -5,7 +5,42 @@ import { uploadMiddleware } from '../middleware/upload.middleware';
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /api/resources:
+ *   get:
+ *     summary: Retrieve a list of resources
+ *     tags: [Resources]
+ *     security:
+ *       - bearerAuth: []
+ *       - ApiKeyAuth: []
+ *     parameters:
+ *       - in: query
+ *         name: type
+ *         schema:
+ *           type: string
+ *         description: Filter by resource type (e.g., Classroom, Lab)
+ *     responses:
+ *       200:
+ *         description: A list of resources
+ *       401:
+ *         $ref: '#/components/responses/UnauthorizedError'
+ */
 router.get('/', authenticateJWT, resourceController.listResources.bind(resourceController));
+
+/**
+ * @swagger
+ * /api/resources/classrooms/vacant:
+ *   get:
+ *     summary: Retrieve currently vacant classrooms
+ *     tags: [Resources]
+ *     security:
+ *       - bearerAuth: []
+ *       - ApiKeyAuth: []
+ *     responses:
+ *       200:
+ *         description: A list of vacant classrooms
+ */
 router.get('/classrooms/vacant', authenticateJWT, resourceController.getVacantClassrooms.bind(resourceController));
 router.get('/:id', authenticateJWT, resourceController.getResource.bind(resourceController));
 router.get('/:id/availability', authenticateJWT, resourceController.getAvailability.bind(resourceController));

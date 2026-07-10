@@ -2,7 +2,38 @@ import { Request, Response, NextFunction } from 'express';
 import { verifyToken } from '../utils/jwt.util';
 import prisma from '../config/database';
 
+export async function authenticateApiKey(req: Request, res: Response, next: NextFunction) {
+  try {
+    const apiKey = req.headers['x-api-key'] as string;
+    if (!apiKey) return next(); // Not an API key request, proceed to next auth middleware or pass
+
+    const validKey = await prisma.apiKey.findUnique({
+      where: { key: apiKey, isActive: true },
+      include: { user: { select: { id: true, email: true, name: true, role: true } } },
+    });
+
+    if (!validKey || (validKey.expiresAt && validKey.expiresAt < new Date())) {
+      return res.status(401).json({ error: 'Invalid or expired API Key' });
+    }
+
+    // Update last used
+    await prisma.apiKey.update({ where: { id: validKey.id }, data: { lastUsedAt: new Date() } });
+
+    (req as any).user = validKey.user;
+    (req as any).isApiKeyAuth = true;
+    return next();
+  } catch (error) {
+    console.error('API Key authentication error:', error);
+    return res.status(500).json({ error: 'Authentication processing failed' });
+  }
+}
+
 export async function authenticateJWT(req: Request, res: Response, next: NextFunction) {
+  // If already authenticated by API Key, skip JWT check
+  if ((req as any).user && (req as any).isApiKeyAuth) {
+    return next();
+  }
+
   try {
     const authHeader = req.headers.authorization;
     

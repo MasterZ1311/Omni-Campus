@@ -12,6 +12,9 @@ import logger from './utils/logger';
 import passport from './config/passport.config';
 import { sessionConfig } from './config/redis.config';
 import { testDatabaseConnection } from './config/database';
+import { authenticateApiKey } from './middleware/auth.middleware';
+import swaggerUi from 'swagger-ui-express';
+import { swaggerSpec } from './utils/swagger';
 
 import authRoutes from './routes/auth.routes';
 import resourceRoutes from './routes/resource.routes';
@@ -26,6 +29,9 @@ import predictiveRoutes from './routes/predictive.routes';
 import qrRoutes from './routes/qr.routes';
 import conciergeRoutes from './routes/concierge.routes';
 import iotRoutes from './routes/iot.routes';
+import complaintRoutes from './routes/complaint.routes';
+import inventoryRoutes from './routes/inventory.routes';
+import notificationRoutes from './routes/notification.routes';
 
 import notificationService from './services/notification.service';
 import waitlistService from './services/waitlist.service';
@@ -49,7 +55,11 @@ const PORT = process.env.PORT || 5000;
 app.use(helmet({
   crossOriginResourcePolicy: { policy: "cross-origin" }
 }));
-app.use(cors({ origin: process.env.FRONTEND_URL || 'http://localhost:5173', credentials: true }));
+// Allow any origin for plug-and-play API integrations
+app.use(cors({ 
+  origin: (origin, callback) => callback(null, true), 
+  credentials: true 
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
@@ -93,10 +103,12 @@ const apiLimiter = rateLimit({
   legacyHeaders: false,
 });
 
+// Swagger UI Documentation
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
 // Routes
 app.use('/auth', apiLimiter, authRoutes);
-app.use('/api', apiLimiter);
-app.use('/auth', authRoutes);
+app.use('/api', apiLimiter, authenticateApiKey);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/bookings', bookingRoutes);
 app.use('/api/admin', adminRoutes);
@@ -109,6 +121,9 @@ app.use('/api/predictive', predictiveRoutes);
 app.use('/api/qr', qrRoutes);
 app.use('/api/concierge', conciergeRoutes);
 app.use('/api/iot', iotRoutes);
+app.use('/api/complaints', complaintRoutes);
+app.use('/api/inventory', inventoryRoutes);
+app.use('/api/notifications', notificationRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

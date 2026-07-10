@@ -2,9 +2,47 @@ import express from 'express';
 import passport from 'passport';
 import { generateAccessToken, generateRefreshToken } from '../utils/jwt.util';
 import prisma from '../config/database';
+import { authenticateJWT } from '../middleware/auth.middleware';
 
 const router = express.Router();
 
+/**
+ * @swagger
+ * /auth/login/local:
+ *   post:
+ *     summary: Authenticate user using local credentials
+ *     tags: [Auth]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - password
+ *             properties:
+ *               email:
+ *                 type: string
+ *               password:
+ *                 type: string
+ *     responses:
+ *       200:
+ *         description: Login successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 accessToken:
+ *                   type: string
+ *                 refreshToken:
+ *                   type: string
+ *                 user:
+ *                   type: object
+ *       401:
+ *         description: Invalid credentials
+ */
 // Local Login (Admin Fallback)
 router.post('/login/local', (req, res, next) => {
   passport.authenticate('local', { session: false }, (err: any, user: any, info: any) => {
@@ -69,10 +107,18 @@ router.get('/oidc/callback', async (req, res) => {
       email = 'facility@campus.edu';
       name = 'John Facility';
       ssoId = 'oidc-facility-001';
+    } else if (role === 'Lab_Assistant') {
+      email = 'labtech@campus.edu';
+      name = 'Mike Tech';
+      ssoId = 'oidc-labtech-001';
+    } else if (role === 'Attender') {
+      email = 'attender@campus.edu';
+      name = 'Sam Attender';
+      ssoId = 'oidc-attender-001';
     }
     
     let user = await prisma.user.findUnique({
-      where: { ssoId },
+      where: { email },
     });
     
     if (!user) {
@@ -89,9 +135,12 @@ router.get('/oidc/callback', async (req, res) => {
         },
       });
     } else {
-      await prisma.user.update({
+      user = await prisma.user.update({
         where: { id: user.id },
-        data: { lastLogin: new Date() },
+        data: { 
+          lastLogin: new Date(),
+          role: role 
+        },
       });
     }
     
@@ -122,9 +171,17 @@ router.post('/logout', (req, res) => {
   res.json({ message: 'Logged out successfully' });
 });
 
-// Health check
-router.get('/health/oidc', (req, res) => {
-  res.json({ available: true, fallbackEnabled: true });
+// Get all Faculty members
+router.get('/faculty', authenticateJWT, async (req, res) => {
+  try {
+    const faculty = await prisma.user.findMany({
+      where: { role: 'Faculty' },
+      select: { id: true, name: true, email: true },
+    });
+    res.json(faculty);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 export default router;

@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql"
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -14,6 +14,7 @@ model User {
   role            String    // Student, Faculty, Administrator, Facility_Manager
   ssoProvider     String    @map("sso_provider") // oidc, local
   ssoId           String?   @unique @map("sso_id")
+  phoneNumber     String?   @map("phone_number")
   passwordHash    String?   @map("password_hash") // Only for local auth
   lastLogin       DateTime? @map("last_login")
   preferences     String?   // JSON String: Notification settings, timezone, etc.
@@ -27,6 +28,8 @@ model User {
   managedResources Resource[] @relation("ManagedBy")
   auditLogs       AuditLog[]
   notifications   Notification[]
+  complaints      Complaint[]
+  apiKeys         ApiKey[]
   
   @@map("users")
 }
@@ -86,6 +89,8 @@ model Booking {
   isLateCancellation  Boolean   @default(false) @map("is_late_cancellation")
   cancellationReason  String?   @map("cancellation_reason")
   cancelledAt         DateTime? @map("cancelled_at")
+  permissionSlipUrl   String?   @map("permission_slip_url")
+  verifiedByFacultyId String?   @map("verified_by_faculty_id")
   version             Int       @default(1)
   createdAt           DateTime  @default(now()) @map("created_at")
   updatedAt           DateTime  @updatedAt @map("updated_at")
@@ -333,3 +338,50 @@ model StaffAssignment {
   @@map("staff_assignments")
 }
 
+model Complaint {
+  id              String   @id @default(uuid())
+  title           String
+  description     String
+  status          String   @default("Pending") // Pending, Routed, Resolved
+  location        String?
+  assignedToDept  String?  @map("assigned_to_dept")
+  reportedById    String   @map("reported_by_id")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  reportedBy      User     @relation(fields: [reportedById], references: [id])
+
+  @@map("complaints")
+}
+
+model LabAsset {
+  id          String   @id @default(uuid())
+  name        String
+  location    String
+  status      String   @default("Online") // Online, Offline, Fault
+  lastUpdated DateTime @default(now())
+}
+
+model InventoryItem {
+  id          String   @id @default(uuid())
+  name        String
+  inStock     Int      @default(0)
+  out         Int      @default(0)
+  status      String   @default("Good") // Good, Low, Critical
+}
+
+model ApiKey {
+  id          String   @id @default(uuid())
+  key         String   @unique
+  name        String   // Identifying name (e.g., "Digital Signage App")
+  userId      String   @map("user_id")
+  isActive    Boolean  @default(true) @map("is_active")
+  lastUsedAt  DateTime? @map("last_used_at")
+  expiresAt   DateTime? @map("expires_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("api_keys")
+}
