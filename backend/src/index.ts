@@ -8,6 +8,7 @@ import http from 'http';
 import { Server } from 'socket.io';
 import rateLimit from 'express-rate-limit';
 import logger from './utils/logger';
+import prisma from './config/database';
 
 import passport from './config/passport.config';
 import { sessionConfig } from './config/redis.config';
@@ -97,8 +98,17 @@ io.on('connection', (socket) => {
 // Rate limiting middleware
 const apiLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 200,
   message: { error: 'Too many requests from this IP, please try again later.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Stricter rate limiter for authentication endpoints (brute-force protection)
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  message: { error: 'Too many login attempts. Please try again in 15 minutes.' },
   standardHeaders: true,
   legacyHeaders: false,
 });
@@ -107,7 +117,7 @@ const apiLimiter = rateLimit({
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
-app.use('/auth', apiLimiter, authRoutes);
+app.use('/auth', authLimiter, authRoutes);
 app.use('/api', apiLimiter, authenticateApiKey);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/bookings', bookingRoutes);
@@ -128,6 +138,25 @@ app.use('/api/notifications', notificationRoutes);
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// 404 catch-all for unknown routes
+app.use('*', (req, res) => {
+  res.status(404).json({
+    error: 'Route not found',
+    path: req.originalUrl,
+    method: req.method,
+  });
+});
+
+// Global error handler — catches unhandled errors in route handlers
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  logger.error(`Unhandled error: ${err.message}`, { stack: err.stack, path: req.path });
+  res.status(err.status || 500).json({
+    error: process.env.NODE_ENV === 'production'
+      ? 'Internal server error'
+      : err.message,
+  });
 });
 
 // Start background workers
@@ -194,5 +223,35 @@ async function startServer() {
     logger.info(`🚀 Server running on http://localhost:${PORT}`);
   });
 }
+
+// Graceful shutdown handler
+function gracefulShutdown(signal: string) {
+  logger.info(`${signal} received. Shutting down gracefully...`);
+  server.close(async () => {
+    logger.info('HTTP server closed.');
+    io.close();
+    logger.info('WebSocket server closed.');
+    await prisma.$disconnect();
+    logger.info('Database disconnected.');
+    process.exit(0);
+  });
+  // Force exit after 10 seconds if graceful shutdown fails
+  setTimeout(() => {
+    logger.error('Graceful shutdown timed out. Forcing exit.');
+    process.exit(1);
+  }, 10000);
+}
+
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));
+
+process.on('uncaughtException', (err) => {
+  logger.error(`Uncaught Exception: ${err.message}`, { stack: err.stack });
+  gracefulShutdown('uncaughtException');
+});
+
+process.on('unhandledRejection', (reason: any) => {
+  logger.error(`Unhandled Rejection: ${reason?.message || reason}`);
+});
 
 startServer();

@@ -113,6 +113,11 @@ export class AdminController {
       const { id } = req.params;
       const { reason } = req.body;
 
+      // Prevent admin from suspending themselves
+      if (id === user.id) {
+        return res.status(400).json({ error: 'Cannot suspend your own account.' });
+      }
+
       await prisma.user.update({
         where: { id },
         data: { role: 'Suspended' },
@@ -178,6 +183,15 @@ export class AdminController {
     try {
       const admin = (req as any).user;
       const { userId, type, channel, message } = req.body;
+
+      // Input validation
+      if (!userId || !channel || !message) {
+        return res.status(400).json({ error: 'userId, channel, and message are required.' });
+      }
+      const validChannels = ['in_app', 'sms', 'email'];
+      if (!validChannels.includes(channel)) {
+        return res.status(400).json({ error: `channel must be one of: ${validChannels.join(', ')}` });
+      }
 
       const targetUser = await prisma.user.findUnique({ where: { id: userId } });
       if (!targetUser) {

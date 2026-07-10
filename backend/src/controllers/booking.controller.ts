@@ -76,7 +76,7 @@ export class BookingController {
   async updateBooking(req: Request, res: Response) {
     try {
       const user = (req as any).user;
-      const version = parseInt(req.body.version || '0');
+      const version = parseInt(req.body.version || '0') || 0;
       const booking = await bookingService.updateBooking(
         req.params.id,
         req.body,
